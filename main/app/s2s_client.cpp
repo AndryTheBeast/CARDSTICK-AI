@@ -708,7 +708,8 @@ static void s2s_client_task(void* parameter)
         std::string history;
         if (xSemaphoreTake(ctx->shared->mutex, pdMS_TO_TICKS(100)) == pdTRUE)
         {
-            history = ctx->shared->history;
+            // taken, not copied: the app writes it again before every start
+            history.swap(ctx->shared->history);
             xSemaphoreGive(ctx->shared->mutex);
         }
         ESP_LOGI(TAG, "Sending the conversation so far (%d bytes)", (int)history.size());

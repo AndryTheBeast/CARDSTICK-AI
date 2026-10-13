@@ -256,7 +256,8 @@ void GeminiApp::typeMessage()
 #endif
 
 #if S2S_CHAT_MEMORY
-#define HANDLE_CHECK_INTERVAL_MS 1000
+#define CHAT_SAVE_INTERVAL_MS 1000
+static const char* CHAT_NS = "chat";
 
 // Called when a session is about to start from the start screen: a new chat, or one
 // picked from those on the SD card, which is put back on the screen. False if the user
@@ -265,17 +266,23 @@ bool GeminiApp::chooseChat()
 {
     std::string handle;
     _turns.clear();
+    _unsavedTurns.clear();
     _chatId = 0;
     _chatSaving = false;
+    _saveFailures = 0;
 
-    if (_hal->settings()->getBool(GEMINI_NS, "remember") && CHAT_STORE::mount(_hal))
+    if (_hal->settings()->getBool(CHAT_NS, "remember") && CHAT_STORE::mount(_hal))
     {
         const int id = CHAT_STORE::pick(_hal);
         if (id < 0)
+        {
+            CHAT_STORE::unmount(_hal);
             return false;
-        _chatSaving = true;
+        }
         if (id > 0 && CHAT_STORE::load(id, _turns, handle))
             _chatId = id;
+        // the card stays mounted for as long as the chat is open
+        _chatSaving = true;
     }
 
     // a new chat must not pick up the session of the one before it
@@ -305,41 +312,69 @@ void GeminiApp::rememberTurn(bool user, const std::string& text)
 {
     const CHAT_STORE::Turn turn = {user, text};
     _turns.push_back(turn);
-    if (_turns.size() > 60)
-        _turns.erase(_turns.begin());
+    CHAT_STORE::trim(_turns);
+    if (_chatSaving)
+        _unsavedTurns.push_back(turn);
+}
 
+// Writes what the card does not have yet: the new turns, and the handle that resumes
+// the session, which changes as the conversation goes on. Looked at once a second from
+// the chat screen, and `now` when the chat is left.
+void GeminiApp::saveChat(bool now)
+{
     if (!_chatSaving)
         return;
+    const uint32_t ms = millis();
+    if (!now && ms < _saveNextCheck)
+        return;
+    _saveNextCheck = ms + CHAT_SAVE_INTERVAL_MS;
+
+    std::string handle = _savedHandle;
+    if (xSemaphoreTake(_s2s_shared.mutex, pdMS_TO_TICKS(50)) == pdTRUE)
+    {
+        handle = _s2s_shared.session_handle;
+        xSemaphoreGive(_s2s_shared.mutex);
+    }
+    if (_unsavedTurns.empty() && (handle == _savedHandle || _chatId == 0))
+        return;
+
     if (_chatId == 0)
         _chatId = CHAT_STORE::create();
-    if (_chatId == 0 || !CHAT_STORE::append(_chatId, turn))
+    bool saved = _chatId != 0;
+    size_t written = 0;
+    while (saved && written < _unsavedTurns.size())
+    {
+        saved = CHAT_STORE::append(_chatId, _unsavedTurns[written]);
+        if (saved)
+            written++;
+    }
+    _unsavedTurns.erase(_unsavedTurns.begin(), _unsavedTurns.begin() + written);
+    if (saved && handle != _savedHandle)
+    {
+        CHAT_STORE::save_handle(_chatId, handle);
+        _savedHandle = handle;
+    }
+
+    if (saved)
+    {
+        _saveFailures = 0;
+    }
+    else if (++_saveFailures >= 3)
     {
         // card pulled out or full: the chat goes on, unsaved
         ESP_LOGW(TAG, "Chat is no longer saved");
         _chatSaving = false;
+        _unsavedTurns.clear();
+        CHAT_STORE::unmount(_hal);
     }
 }
 
-// The handle that resumes the session changes as the conversation goes on. The latest
-// one is kept beside the chat, so that a restart can pick the session up where it was.
-void GeminiApp::saveSessionHandle()
+// Back to the start screen: the last of the chat goes to the card, which is let go
+void GeminiApp::closeChat()
 {
-    const uint32_t now = millis();
-    if (now < _handleNextCheck)
-        return;
-    _handleNextCheck = now + HANDLE_CHECK_INTERVAL_MS;
-    if (!_chatSaving || _chatId == 0)
-        return;
-
-    std::string handle;
-    if (xSemaphoreTake(_s2s_shared.mutex, pdMS_TO_TICKS(50)) != pdTRUE)
-        return;
-    handle = _s2s_shared.session_handle;
-    xSemaphoreGive(_s2s_shared.mutex);
-    if (handle == _savedHandle)
-        return;
-    CHAT_STORE::save_handle(_chatId, handle);
-    _savedHandle = handle;
+    saveChat(true);
+    CHAT_STORE::unmount(_hal);
+    _chatSaving = false;
 }
 #endif
 
@@ -367,27 +402,26 @@ void GeminiApp::init()
 #endif
 
 #if S2S_CHAT_MEMORY
-    for (auto& item : _groups[2].items)
+    // "Forget chats" in "Chat settings" opens the list to forget from
+    for (auto& group : _groups)
     {
-        if (item.type != SETTINGS::TYPE_CALLBACK)
+        if (group.nvs_namespace != CHAT_NS)
             continue;
-        item.callback = [this](SETTINGS::SettingItem_t&)
+        for (auto& item : group.items)
         {
-            if (!UTILS::UI::show_confirmation_dialog(_hal, "Forget chats", "Delete all saved chats from the SD card?", "Forget"))
-                return;
-            if (!CHAT_STORE::mount(_hal))
+            if (item.type != SETTINGS::TYPE_CALLBACK)
+                continue;
+            item.callback = [this](SETTINGS::SettingItem_t&)
             {
-                UTILS::UI::show_error_dialog(_hal, "Error", "Failed to mount SD card", "OK");
-                return;
-            }
-            const int forgotten = CHAT_STORE::remove_all();
-            if (xSemaphoreTake(_s2s_shared.mutex, pdMS_TO_TICKS(200)) == pdTRUE)
-            {
-                _s2s_shared.session_handle.clear();
-                xSemaphoreGive(_s2s_shared.mutex);
-            }
-            UTILS::UI::show_message_dialog(_hal, "Forget chats", std::to_string(forgotten) + " chats forgotten", 0);
-        };
+                if (!CHAT_STORE::mount(_hal))
+                {
+                    UTILS::UI::show_error_dialog(_hal, "Error", "Failed to mount SD card", "OK");
+                    return;
+                }
+                CHAT_STORE::forget(_hal);
+                CHAT_STORE::unmount(_hal);
+            };
+        }
     }
 #endif
 
@@ -585,6 +619,7 @@ void GeminiApp::update()
                 updateScrollPosition();
                 setState(APP_STATE_S2S_SPEAKING);
                 is_rendered = false;
+
             }
 
             if (bits & (S2S_ERROR_BIT | S2S_TASK_STOPPED_BIT))
@@ -678,6 +713,9 @@ void GeminiApp::update()
                     }
                     xEventGroupClearBits(_control_event_group, S2S_FATAL_ERROR_BIT | S2S_ERROR_BIT);
                     stopS2S();
+#if S2S_CHAT_MEMORY
+                    closeChat();
+#endif
                     UTILS::UI::show_error_dialog(_hal, "Error", err_msg.empty() ? "Session failed" : err_msg);
                     _currentScreen = SCREEN_START;
                     setState(APP_STATE_IDLE);
@@ -687,6 +725,9 @@ void GeminiApp::update()
                 {
                     ESP_LOGW(TAG, "S2S session ended, attempting reconnect");
                     stopS2S();
+#if S2S_CHAT_MEMORY
+                    saveChat(true);
+#endif
                     vTaskDelay(pdMS_TO_TICKS(2000));
                     startS2S();
                     is_rendered = false;
@@ -696,7 +737,7 @@ void GeminiApp::update()
         }
 
 #if S2S_CHAT_MEMORY
-        saveSessionHandle();
+        saveChat();
 #endif
 #if HAL_USE_BAT
         updateBattery();
@@ -951,9 +992,14 @@ static std::string led_menu_summary(HAL::Hal* hal, const SETTINGS::SettingGroup_
 // out of the list of groups and opened from the rows of "LED settings" instead.
 void GeminiApp::initLedMenus()
 {
-    for (size_t i = 3; i < _groups.size();)
+    // "LED settings" is the first of them
+    size_t led = 3;
+    while (led < _groups.size() - 1 && _groups[led].nvs_namespace != "led")
+        led++;
+
+    for (size_t i = led + 1; i < _groups.size();)
     {
-        if (_groups[i].nvs_namespace == "led" && _groups[i].name != _groups[3].name)
+        if (_groups[i].nvs_namespace == "led")
         {
             _ledMenus.push_back(_groups[i]);
             _groups.erase(_groups.begin() + i);
@@ -964,7 +1010,7 @@ void GeminiApp::initLedMenus()
         }
     }
 
-    for (auto& item : _groups[3].items)
+    for (auto& item : _groups[led].items)
     {
         if (item.type != SETTINGS::TYPE_CALLBACK)
             continue;
@@ -1381,8 +1427,7 @@ void GeminiApp::handleResponseScreenInput()
             _hal->playNextSound();
             stopS2S();
 #if S2S_CHAT_MEMORY
-            _handleNextCheck = 0;
-            saveSessionHandle();
+            closeChat();
 #endif
 #if S2S_TEXT_INPUT
             _textMode = false;

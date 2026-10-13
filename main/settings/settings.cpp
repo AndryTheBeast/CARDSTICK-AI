@@ -152,11 +152,17 @@ namespace SETTINGS
              "500",
              "System instructions for the model"},
         };
+
 #if HAL_USE_SDCARD
-        gemini_group.items.push_back(
-            {"remember", "Remember chats", TYPE_BOOL, "true", "true", "", "", "Save chats to the SD card and offer to continue one when starting"});
-        // the app deletes them: it is the one that knows where they are
-        gemini_group.items.push_back({"", "Forget chats", TYPE_CALLBACK, "", "", "", "", "Delete all saved chats from the SD card"});
+        SettingGroup_t chat_group;
+        chat_group.name = "Chat settings";
+        chat_group.nvs_namespace = "chat";
+        chat_group.items = {
+            back_item,
+            {"remember", "Remember chats", TYPE_BOOL, "true", "true", "", "", "Save chats to the SD card and offer to continue one when starting"},
+            // the app shows the list: it is the one that knows where the chats are
+            {"", "Forget chats", TYPE_CALLBACK, "", "", "", "", "Choose saved chats to delete from the SD card, or delete them all"},
+        };
 #endif
 
 #if HAL_USE_LED
@@ -285,6 +291,10 @@ namespace SETTINGS
         // after the first three groups, whose positions the app relies on
         _metadata.insert(_metadata.begin() + 3, led_group);
         _metadata.insert(_metadata.begin() + 4, led_state_groups.begin(), led_state_groups.end());
+#endif
+#if HAL_USE_SDCARD
+        // right below "Gemini settings"
+        _metadata.insert(_metadata.begin() + 3, chat_group);
 #endif
 
         // Text settings edited from a phone or PC browser: the only way without a keyboard,

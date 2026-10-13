@@ -98,10 +98,14 @@ private:
     int _chatId = 0;
     bool _chatSaving = false;
     std::string _savedHandle;
-    uint32_t _handleNextCheck = 0;
+    // Turns not on the card yet
+    std::vector<CHAT_STORE::Turn> _unsavedTurns;
+    int _saveFailures = 0;
+    uint32_t _saveNextCheck = 0;
     bool chooseChat();
     void rememberTurn(bool user, const std::string& text);
-    void saveSessionHandle();
+    void saveChat(bool now = false);
+    void closeChat();
 #endif
 
     // Drawing
