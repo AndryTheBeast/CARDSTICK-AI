@@ -60,7 +60,7 @@ Configuration settings (WiFi credentials, API keys) are compatible with M5Apps.
   ```
 
   - Copy file to SD card root as `/sdcard/settings.txt`
-  - In Settings menu select: `Import (SD card)`
+  - In Settings menu select: `SD card` → `Import`
 
 ### 3. Build the Project
 

@@ -164,10 +164,8 @@ namespace SETTINGS
 #endif
 
 #if HAL_USE_SDCARD
-        SettingGroup_t export_group;
-        export_group.name = "Export (SD card)";
-        export_group.items = {};
-        export_group.callback = [this](SETTINGS::SettingGroup_t& group)
+        SettingItem_t export_item = {"", "Export", TYPE_CALLBACK, "", "", "", "", "Save all settings to settings.txt on the SD card"};
+        export_item.callback = [this](SETTINGS::SettingItem_t& item)
         {
             if (!_hal)
                 return;
@@ -187,10 +185,8 @@ namespace SETTINGS
             }
         };
 
-        SettingGroup_t import_group;
-        import_group.name = "Import (SD card)";
-        import_group.items = {};
-        import_group.callback = [this](SETTINGS::SettingGroup_t& group)
+        SettingItem_t import_item = {"", "Import", TYPE_CALLBACK, "", "", "", "", "Load the settings from settings.txt on the SD card"};
+        import_item.callback = [this](SETTINGS::SettingItem_t& item)
         {
             if (!_hal)
                 return;
@@ -221,10 +217,12 @@ namespace SETTINGS
             }
         };
 
-        _metadata = {wifi_group, sys_group, gemini_group, export_group, import_group};
-#else
-        _metadata = {wifi_group, sys_group, gemini_group};
+        SettingGroup_t sdcard_group;
+        sdcard_group.name = "SD card";
+        sdcard_group.items = {back_item, export_item, import_item};
 #endif
+
+        _metadata = {wifi_group, sys_group, gemini_group};
 
 #if HAL_USE_LED
         // after the first three groups, whose positions the app relies on
@@ -242,6 +240,10 @@ namespace SETTINGS
                 UTILS::WEB_SETUP::run(_hal);
         };
         _metadata.push_back(web_group);
+
+#if HAL_USE_SDCARD
+        _metadata.push_back(sdcard_group);
+#endif
 
         SettingGroup_t power_group;
         power_group.items = {};
@@ -736,6 +738,11 @@ namespace SETTINGS
             {
                 if (item.type == TYPE_NONE)
                     continue;
+#if HAL_USE_SDCARD
+                // rows that open or run something hold no value
+                if (item.type == TYPE_CALLBACK)
+                    continue;
+#endif
 
                 std::string cache_key = _makeKey(group.nvs_namespace, item.key);
                 auto it = _cache.find(cache_key);
