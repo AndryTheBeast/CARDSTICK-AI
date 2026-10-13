@@ -59,6 +59,9 @@ private:
         uint8_t last_alpha = 255;
     } _anim_context;
     void setState(AppState state);
+    uint32_t _lastActivity = 0;
+    uint32_t _autoOffLastCheck = 0;
+    void checkAutoOff();
 
     GeminiAppScreen _currentScreen;
     std::vector<SETTINGS::SettingGroup_t> _groups;

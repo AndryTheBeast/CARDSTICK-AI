@@ -34,7 +34,9 @@ static const char* GEMINI_NS = "gemini";
 #ifdef CONFIG_BOARD_STICKS3
 static const char* HINT_MAIN = "[A] START [B hold] SETTINGS";
 static const char* API_KEY_HINT = "[A] [B hold]";
+static const char* HOME_TITLE = "STICK AI";
 #else
+static const char* HOME_TITLE = "CARDPUTER AI";
 static const char* HINT_MAIN = "[\u2190][\u2192] [ENTER] START [ESC] SETTINGS";
 static const char* API_KEY_HINT = "[ENTER] [ESC]";
 #endif
@@ -548,7 +550,7 @@ void GeminiApp::update()
 #if HAL_USE_LED
     updateLed();
 #endif
-
+    checkAutoOff();
 
     switch (_currentScreen)
     {
@@ -860,7 +862,7 @@ bool GeminiApp::drawMainScreen()
     canvas->fillScreen(THEME_COLOR_BG);
     canvas->setFont(FONT_16);
     canvas->setTextColor(THEME_COLOR_TITLE);
-    canvas->drawCenterString("Gemini AI", canvas->width() / 2, TEXT_PADDING);
+    canvas->drawCenterString(HOME_TITLE, canvas->width() / 2, TEXT_PADDING);
     canvas->setFont(FONT_12);
     canvas->setTextColor(TFT_DARKGREY);
     canvas->drawCenterString("v" BUILD_NUMBER, canvas->width() / 2, TEXT_PADDING + 20);
@@ -892,7 +894,7 @@ bool GeminiApp::drawMainScreen()
 
     int offestY = TEXT_PADDING;
     int lineHeight = _hal->canvas()->fontHeight(FONT_16);
-    _hal->canvas()->drawCenterString("Gemini AI", _hal->canvas()->width() / 2, offestY);
+    _hal->canvas()->drawCenterString(HOME_TITLE, _hal->canvas()->width() / 2, offestY);
     offestY += lineHeight * 2;
     _hal->canvas()->pushImage((_hal->canvas()->width() - 64) / 2, offestY, 64, 64, image_data_gemini_icon, TFT_BLACK);
 
@@ -1645,9 +1647,43 @@ void GeminiApp::setState(AppState state)
         return;
     ESP_LOGI(TAG, "State -> %d, heap=%lu", state, (unsigned long)esp_get_free_heap_size());
     _appState = state;
+    _lastActivity = millis();
     // s_anim_bg_valid = false;
     _anim_context.timer_start = millis();
     // _anim_context.last_alpha = 255;
+}
+
+// Sleep (Cardputer) or power off (StickS3) once nothing has happened for the time
+// chosen in the settings. A key press and a change of state both count: a chat left
+// listening runs out, one that is still being answered does not.
+void GeminiApp::checkAutoOff()
+{
+    const uint32_t now = millis();
+    if (now - _autoOffLastCheck < 1000)
+        return;
+    _autoOffLastCheck = now;
+
+    const int minutes = atoi(_hal->settings()->getString("power", "auto_off").c_str());
+    if (minutes <= 0 || _appState == APP_STATE_S2S_CONNECTING || _appState == APP_STATE_S2S_SPEAKING)
+    {
+        _lastActivity = now;
+        return;
+    }
+    const uint32_t idle = std::min(now - _lastActivity, now - _hal->keyboard()->lastPressedTime());
+    if (idle < (uint32_t)minutes * 60000)
+        return;
+
+    ESP_LOGW(TAG, "Idle for %d min: turning off", minutes);
+    if (_s2s_active)
+    {
+        stopS2S();
+#if S2S_CHAT_MEMORY
+        closeChat();
+#endif
+    }
+    _hal->powerOff();
+    // not reached unless turning off failed: start counting again
+    _lastActivity = millis();
 }
 
 // Draw the animation

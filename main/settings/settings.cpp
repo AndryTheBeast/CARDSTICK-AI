@@ -314,22 +314,36 @@ namespace SETTINGS
         _metadata.push_back(sdcard_group);
 #endif
 
+// the app reads the minutes from the start of the choice: "Off" is none
+#define AUTO_OFF_CHOICES "Off;1 min;2 min;5 min;10 min;15 min;30 min;60 min"
         SettingGroup_t power_group;
-        power_group.items = {};
+        power_group.nvs_namespace = "power";
 #ifdef CONFIG_BOARD_STICKS3
         power_group.name = "Power off";
-        power_group.callback = [this](SETTINGS::SettingGroup_t& group)
+        SettingItem_t power_item = {"", "Power off", TYPE_CALLBACK, "", "", "", "", "Turn the device off now"};
+        power_item.callback = [this](SETTINGS::SettingItem_t& item)
         {
             if (_hal && UTILS::UI::show_confirmation_dialog(_hal, "Power off", "Turn the device off?"))
                 _hal->powerOff();
         };
+        power_group.items = {
+            back_item,
+            {"auto_off", "Auto power off", TYPE_STRING, "Off", "", AUTO_OFF_CHOICES, "", "Turn the device off after this long without a button press or a reply"},
+            power_item,
+        };
 #else
         // no software power off on the Cardputer: deep sleep
         power_group.name = "Sleep";
-        power_group.callback = [this](SETTINGS::SettingGroup_t& group)
+        SettingItem_t power_item = {"", "Sleep", TYPE_CALLBACK, "", "", "", "", "Sleep now. G0 wakes up"};
+        power_item.callback = [this](SETTINGS::SettingItem_t& item)
         {
             if (_hal && UTILS::UI::show_confirmation_dialog(_hal, "Sleep", "Sleep? G0 wakes up"))
                 _hal->powerOff();
+        };
+        power_group.items = {
+            back_item,
+            {"auto_off", "Auto sleep", TYPE_STRING, "Off", "", AUTO_OFF_CHOICES, "", "Sleep after this long without a key press or a reply. G0 wakes up"},
+            power_item,
         };
 #endif
         _metadata.push_back(power_group);
