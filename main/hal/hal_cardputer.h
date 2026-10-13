@@ -16,6 +16,9 @@
 #define RGB_LED_POWER_GPIO 38
 // backlight PWM frequency, as set in display/display.hpp
 #define RGB_LED_POWER_PWM_HZ 256
+#define BACKLIGHT_GPIO GPIO_NUM_38
+// G0 button, present on every model: wakes the device from deep sleep
+#define WAKEUP_GPIO GPIO_NUM_0
 
 #if HAL_USE_SPEAKER
 extern const uint8_t error_wav_start[] asm("_binary_error_wav_start");
@@ -97,6 +100,7 @@ namespace HAL
         uint8_t getBatLevel(float voltage) override;
         float getBatVoltage() override;
 #endif
+        void powerOff() override;
         void reboot() override;
     };
 } // namespace HAL

@@ -236,17 +236,27 @@ namespace SETTINGS
                 UTILS::WEB_SETUP::run(_hal);
         };
         _metadata.push_back(web_group);
+#endif
 
         SettingGroup_t power_group;
-        power_group.name = "Power off";
         power_group.items = {};
+#ifdef CONFIG_BOARD_STICKS3
+        power_group.name = "Power off";
         power_group.callback = [this](SETTINGS::SettingGroup_t& group)
         {
             if (_hal && UTILS::UI::show_confirmation_dialog(_hal, "Power off", "Turn the device off?"))
                 _hal->powerOff();
         };
-        _metadata.push_back(power_group);
+#else
+        // no software power off on the Cardputer: deep sleep
+        power_group.name = "Sleep";
+        power_group.callback = [this](SETTINGS::SettingGroup_t& group)
+        {
+            if (_hal && UTILS::UI::show_confirmation_dialog(_hal, "Sleep", "Sleep? G0 wakes up"))
+                _hal->powerOff();
+        };
 #endif
+        _metadata.push_back(power_group);
     }
 
     void Settings::setHal(HAL::Hal* hal) { _hal = hal; }

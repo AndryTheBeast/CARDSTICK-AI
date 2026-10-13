@@ -16,6 +16,8 @@
 #endif
 #include "esp_log.h"
 #include "driver/gpio.h"
+#include "driver/rtc_io.h"
+#include "esp_sleep.h"
 
 static const char* TAG = "HAL";
 
@@ -203,6 +205,10 @@ void HalCardputer::init()
 {
     ESP_LOGI(TAG, "HAL init");
 
+    // held low through deep sleep, see powerOff()
+    gpio_hold_dis(BACKLIGHT_GPIO);
+    gpio_deep_sleep_hold_dis();
+
 #if HAL_USE_I2C
     _init_i2c();
 #endif
@@ -287,6 +293,47 @@ float HalCardputer::getBatVoltage()
     return filtered;
 }
 #endif
+
+// There is no power management chip, and the power switch is a physical one: "off" is
+// deep sleep, left by pressing G0, which restarts the device.
+void HalCardputer::powerOff()
+{
+    ESP_LOGW(TAG, "Deep sleep...");
+#if HAL_USE_WIFI
+    wifi()->set_status_callback(nullptr);
+    wifi()->disconnect();
+#endif
+#if HAL_USE_MIC
+    _mic->end();
+#endif
+#if HAL_USE_SPEAKER
+    _speaker->end();
+#endif
+    if (_es8311)
+    {
+        _es8311->mic_disable();
+        _es8311->speaker_disable();
+    }
+#if HAL_USE_LED
+    led()->off();
+#endif
+#if HAL_USE_DISPLAY
+    _display->setBrightness(0);
+    _display->sleep();
+#endif
+    delay(100);
+    // the pin floats in deep sleep otherwise, and with it the backlight
+    gpio_hold_en(BACKLIGHT_GPIO);
+    gpio_deep_sleep_hold_en();
+
+    // a press still held would wake the device straight away
+    while (gpio_get_level(WAKEUP_GPIO) == 0)
+        delay(10);
+    rtc_gpio_pullup_en(WAKEUP_GPIO);
+    rtc_gpio_pulldown_dis(WAKEUP_GPIO);
+    esp_sleep_enable_ext0_wakeup(WAKEUP_GPIO, 0);
+    esp_deep_sleep_start();
+}
 
 void HalCardputer::reboot()
 {
