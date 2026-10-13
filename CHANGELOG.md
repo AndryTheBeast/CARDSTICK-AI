@@ -1,3 +1,11 @@
+v3.2
+
+- Gemini answers sooner: your turn now ends after half a second of silence, instead of waiting up to several seconds
+- Battery percentage now matches M5Launcher and Bruce on both devices (0% at 3.30 V, 100% at 4.10 V)
+- M5StickS3: louder speaker, x6 on battery and x10 on USB power
+- New default settings: screen brightness 40%, system volume 30%, S2S volume 60%, shorter rules. The StickS3 no longer gets the Cardputer rules after a full flash
+- Firmware is about 320 KB smaller
+
 v3.1
 
 - M5StickS3 support: two-button navigation, Web setup page for WiFi and API key, Power off menu entry
