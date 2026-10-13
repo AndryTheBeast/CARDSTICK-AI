@@ -105,6 +105,9 @@ private:
     uint32_t _ledNextCheck = 0;
     uint32_t _ledApplied = 0xFFFFFFFF;
     void updateLed();
+    // One group of settings per LED state, opened from the rows of "LED settings"
+    std::vector<SETTINGS::SettingGroup_t> _ledMenus;
+    void initLedMenus();
 #endif
     void handleMainScreenInput();
     bool drawAnimation(bool need_update, bool small = false);

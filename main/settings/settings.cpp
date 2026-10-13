@@ -147,6 +147,9 @@ namespace SETTINGS
 
 #if HAL_USE_LED
 #define LED_COLOR_CHOICES "Off;Purple;White;Red;Orange;Yellow;Lime Green;Green;Cyan;Blue;Magenta;Pink"
+#define LED_EFFECT_CHOICES "Steady;Blink;Breathe"
+#define LED_SPEED_CHOICES "Slow;Normal;Fast"
+#define LED_KEY_CHOICES "Off;Random;Purple;White;Red;Orange;Yellow;Lime Green;Green;Cyan;Blue;Magenta;Pink"
         SettingGroup_t led_group;
         led_group.name = "LED settings";
         led_group.nvs_namespace = "led";
@@ -154,13 +157,42 @@ namespace SETTINGS
             back_item,
             {"enabled", "Enabled", TYPE_BOOL, "true", "true", "", "", "Show the device state on the RGB LED"},
             {"brightness", "Brightness", TYPE_NUMBER, "64", "64", "0", "255", "LED brightness (0-100%)", nullptr, true},
-            {"low_bat", "Low batt. %", TYPE_NUMBER, "15", "15", "0", "50", "Battery level (%) under which the LED blinks. 0 to never blink"},
-            {"c_lowbat", "Low batt.", TYPE_STRING, "Red", "", LED_COLOR_CHOICES, "", "Blinking colour when the battery is low"},
-            {"c_offline", "No WiFi", TYPE_STRING, "Orange", "", LED_COLOR_CHOICES, "", "Colour when WiFi is not connected"},
-            {"c_online", "WiFi on", TYPE_STRING, "Green", "", LED_COLOR_CHOICES, "", "Colour when WiFi is connected"},
-            {"c_listen", "Listening", TYPE_STRING, "Purple", "", LED_COLOR_CHOICES, "", "Colour while you are speaking"},
-            {"c_speak", "Speaking", TYPE_STRING, "Yellow", "", LED_COLOR_CHOICES, "", "Colour while Gemini is speaking"},
+            // one row per state: the app opens the group of the same name from it
+            {"", "Low battery", TYPE_CALLBACK, "", "", "", "", "Level, colour and effect when the battery is low"},
+            {"", "No WiFi", TYPE_CALLBACK, "", "", "", "", "Colour and effect when WiFi is not connected"},
+            {"", "WiFi on", TYPE_CALLBACK, "", "", "", "", "Colour and effect when WiFi is connected"},
+            {"", "Listening", TYPE_CALLBACK, "", "", "", "", "Colour and effect while you are speaking"},
+            {"", "Speaking", TYPE_CALLBACK, "", "", "", "", "Colour and effect while Gemini is speaking"},
+            {"", "Typing", TYPE_CALLBACK, "", "", "", "", "Colour and effect in text mode, and a flash on each key press"},
         };
+
+        // The LED states, one group each in the same namespace. On the device they are
+        // not listed among the groups but opened from the rows above; Web setup shows
+        // them as sections of their own.
+        std::vector<SettingGroup_t> led_state_groups;
+        auto add_led_state = [&](const char* name, const std::string& key, const char* color, const char* effect, const std::string& when)
+        {
+            SettingGroup_t state_group;
+            state_group.name = name;
+            state_group.nvs_namespace = "led";
+            state_group.items = {
+                back_item,
+                {"c_" + key, "Colour", TYPE_STRING, color, "", LED_COLOR_CHOICES, "", "Colour " + when},
+                {"e_" + key, "Effect", TYPE_STRING, effect, "", LED_EFFECT_CHOICES, "", "Steady, blinking or breathing " + when},
+                {"s_" + key, "Speed", TYPE_STRING, "Normal", "", LED_SPEED_CHOICES, "", "How fast it blinks or breathes"},
+            };
+            led_state_groups.push_back(state_group);
+        };
+        add_led_state("Low battery", "lowbat", "Red", "Blink", "when the battery is low");
+        add_led_state("No WiFi", "offline", "Orange", "Steady", "when WiFi is not connected");
+        add_led_state("WiFi on", "online", "Green", "Steady", "when WiFi is connected");
+        add_led_state("Listening", "listen", "Purple", "Steady", "while you are speaking");
+        add_led_state("Speaking", "speak", "Yellow", "Steady", "while Gemini is speaking");
+        add_led_state("Typing", "typing", "Blue", "Steady", "in text mode, while it waits for your message");
+        led_state_groups.back().items.push_back(
+            {"k_typing", "Key press", TYPE_STRING, "Off", "", LED_KEY_CHOICES, "", "Flash the LED in this colour on each key press while you type a message"});
+        led_state_groups[0].items.insert(led_state_groups[0].items.begin() + 1,
+                                         {"low_bat", "Level %", TYPE_NUMBER, "15", "15", "0", "50", "Battery level (%) under which the LED shows that the battery is low. 0 for never"});
 #endif
 
 #if HAL_USE_SDCARD
@@ -227,6 +259,7 @@ namespace SETTINGS
 #if HAL_USE_LED
         // after the first three groups, whose positions the app relies on
         _metadata.insert(_metadata.begin() + 3, led_group);
+        _metadata.insert(_metadata.begin() + 4, led_state_groups.begin(), led_state_groups.end());
 #endif
 
         // Text settings edited from a phone or PC browser: the only way without a keyboard,

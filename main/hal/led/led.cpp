@@ -471,10 +471,13 @@ namespace HAL
             }
             else
             {
-                set_pixel_off();
+                // what follows the blink: off, or the colour given to flash()
+                const bool lit = _cur_color.r || _cur_color.g || _cur_color.b;
+                set_pixel_color(_cur_color);
                 update_led();
                 stop_timer();
-                _mode = LEDMode::OFF;
+                _mode = lit ? LEDMode::CONSTANT : LEDMode::OFF;
+                _color = _cur_color;
                 _pattern_step = 0;
             }
             break;
@@ -587,6 +590,27 @@ namespace HAL
             break;
         }
 
+        case LEDMode::BREATHE:
+        {
+            // _param1 is the period in steps. A triangle wave, squared: the eye judges
+            // brightness by ratio, and a straight ramp seems to rush through the dim end.
+            const uint32_t half = _param1 / 2;
+            const uint32_t pos = _pattern_step % _param1;
+            const uint32_t ramp = pos < half ? pos : _param1 - pos;
+            const uint32_t level = BREATHE_MIN_LEVEL + (255 - BREATHE_MIN_LEVEL) * ramp * ramp / (half * half);
+            // a channel that is on stays on at the dim end, or the colour would shift
+            auto scale = [level](uint8_t channel) -> uint8_t
+            {
+                const uint32_t scaled = channel * level / 255;
+                return (channel && !scaled) ? 1 : scaled;
+            };
+            set_pixel_color(Color(scale(_color.r), scale(_color.g), scale(_color.b)));
+            update_led();
+            _pattern_step = pos + 1;
+            start_timer(BREATHE_STEP_MS * 1000);
+            break;
+        }
+
         case LEDMode::CONSTANT:
         case LEDMode::OFF:
         default:
@@ -662,6 +686,33 @@ namespace HAL
         stop_timer();
         _mode = LEDMode::SINGLE_BLINK;
         _color = color;
+        _cur_color = Color();
+        _param1 = duration_ms;
+        _pattern_step = 0;
+        start_timer(1000);
+
+        // Release mutex
+        xSemaphoreGive(_mutex);
+        return true;
+    }
+
+    bool LED::flash(const Color& color, uint32_t duration_ms, const Color& then)
+    {
+        if (!check_initialized())
+        {
+            return false;
+        }
+
+        // Lock mutex to protect shared state
+        if (xSemaphoreTake(_mutex, portMAX_DELAY) != pdTRUE)
+        {
+            return false;
+        }
+
+        stop_timer();
+        _mode = LEDMode::SINGLE_BLINK;
+        _color = color;
+        _cur_color = then;
         _param1 = duration_ms;
         _pattern_step = 0;
         start_timer(1000);
@@ -770,6 +821,45 @@ namespace HAL
 
         // Start fade in
         start_timer((fade_in_ms * 1000) / FADE_STEPS);
+
+        // Release mutex
+        xSemaphoreGive(_mutex);
+        return true;
+    }
+
+    bool LED::breathe(const Color& color, uint32_t period_ms)
+    {
+        if (!check_initialized())
+        {
+            return false;
+        }
+
+        // Lock mutex to protect shared state
+        if (xSemaphoreTake(_mutex, portMAX_DELAY) != pdTRUE)
+        {
+            return false;
+        }
+
+        uint32_t steps = period_ms / BREATHE_STEP_MS;
+        if (steps < 4)
+            steps = 4;
+        if (_mode == LEDMode::BREATHE)
+        {
+            // keep breathing where it is, in the new colour and pace
+            _pattern_step = _pattern_step * steps / _param1;
+            _color = color;
+            _param1 = steps;
+        }
+        else
+        {
+            stop_timer();
+            _mode = LEDMode::BREATHE;
+            _color = color;
+            _param1 = steps;
+            // begin at full brightness, so that a change of state shows at once
+            _pattern_step = steps / 2;
+            start_timer(1000);
+        }
 
         // Release mutex
         xSemaphoreGive(_mutex);

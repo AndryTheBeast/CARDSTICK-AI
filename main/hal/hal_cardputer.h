@@ -10,6 +10,7 @@
  */
 #include "hal.h"
 #include "common_define.h"
+#include <functional>
 
 #define RGB_LED_GPIO 21
 // display backlight: on the ADV and v1.1 it also switches the supply of the RGB LED
@@ -64,6 +65,10 @@ namespace HAL
     public:
         HalCardputer(SETTINGS::Settings* settings) : Hal(settings) {}
 
+        // Called with the click that answers a key press, for as long as it is set. The
+        // dialogs are shared with the StickS3 and offer no hook of their own.
+        std::function<void()> on_key_sound;
+
         std::string type() override
         {
             switch (_board_type)
@@ -82,7 +87,12 @@ namespace HAL
         void playErrorSound() override { _speaker->playWav(error_wav_start, error_wav_end - error_wav_start); }
         void playKeyboardSound() override { _speaker->tone(5000, 20); }
         void playLastSound() override { _speaker->tone(6000, 20); }
-        void playNextSound() override { _speaker->tone(7000, 20); }
+        void playNextSound() override
+        {
+            _speaker->tone(7000, 20);
+            if (on_key_sound)
+                on_key_sound();
+        }
         void playDeviceConnectedSound() override
         {
             _speaker->tone(1000, 100);

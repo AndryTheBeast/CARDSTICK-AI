@@ -40,7 +40,8 @@ namespace HAL
         SINGLE_BLINK,
         PERIODIC_BLINK,
         DOUBLE_BLINK,
-        FADE
+        FADE,
+        BREATHE
     };
 
     /**
@@ -92,6 +93,15 @@ namespace HAL
         bool blink_once(const Color& color, uint32_t duration_ms);
 
         /**
+         * @brief Show a colour briefly, then stay on another one
+         * @param color RGB color of the flash
+         * @param duration_ms Duration of the flash in milliseconds
+         * @param then RGB color shown steadily afterwards (black for off)
+         * @return true on success, false otherwise
+         */
+        bool flash(const Color& color, uint32_t duration_ms, const Color& then);
+
+        /**
          * @brief Start periodic single blink pattern
          * @param color RGB color for the blink
          * @param on_ms Duration LED is on in milliseconds
@@ -119,6 +129,14 @@ namespace HAL
          * @return true on success, false otherwise
          */
         bool fade(const Color& color, uint32_t fade_in_ms, uint32_t fade_out_ms, uint32_t hold_ms);
+
+        /**
+         * @brief Swell between dim and full brightness, endlessly
+         * @param color RGB color at full brightness
+         * @param period_ms Duration of one dim-bright-dim cycle in milliseconds
+         * @return true on success, false otherwise
+         */
+        bool breathe(const Color& color, uint32_t period_ms);
 
         /**
          * @brief Stop any ongoing pattern and turn off LED
@@ -196,6 +214,9 @@ namespace HAL
         // WS2812 timing constants
         static constexpr uint32_t RMT_RESOLUTION_HZ = 20000000; // 20MHz
         static constexpr uint32_t FADE_STEPS = 50;
+        static constexpr uint32_t BREATHE_STEP_MS = 30;
+        // lowest point of a breath, out of 255: dim, but not off
+        static constexpr uint32_t BREATHE_MIN_LEVEL = 10;
         static constexpr uint32_t FRAME_REPEATS = 3;
     };
 

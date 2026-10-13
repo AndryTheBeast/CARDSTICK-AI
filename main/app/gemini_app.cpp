@@ -4,6 +4,7 @@
 #include "esp_system.h"
 #include "app/utils/ui/dialog.h"
 #include "app/utils/ui/settings_screen.h"
+#include "app/utils/ui/settings_submenu.h"
 #include "app/utils/ui/key_repeat.h"
 #include "app/utils/theme/theme_define.h"
 #include "s2s_client.h"
@@ -21,6 +22,12 @@
 #include "hal.h"
 #include "common_define.h"
 #include "wifi/wifi.h"
+#if S2S_TEXT_INPUT && HAL_USE_LED
+#include "hal_cardputer.h"
+#include "esp_random.h"
+#define LED_KEY_FLASH_MS 120
+static uint32_t led_color_by_name(const std::string& name);
+#endif
 
 static const char* TAG = "GEMINI_APP";
 static const char* GEMINI_NS = "gemini";
@@ -177,8 +184,49 @@ void GeminiApp::setTextMode(bool enabled)
 void GeminiApp::typeMessage()
 {
     std::string text;
+#if HAL_USE_LED
+    // Flash the LED on each key press, if that is switched on. The message box runs its
+    // own loop, so this rides on the key click it asks the HAL for.
+    auto* settings = _hal->settings();
+    const std::string key_color = settings->getString("led", "k_typing");
+    auto* hal = static_cast<HAL::HalCardputer*>(_hal);
+    if (settings->getBool("led", "enabled") && key_color != "Off")
+    {
+        const uint32_t brightness = settings->getNumber("led", "brightness");
+        auto scaled = [brightness](uint32_t rgb)
+        {
+            return HAL::Color(((rgb >> 16) & 0xFF) * brightness / 255, ((rgb >> 8) & 0xFF) * brightness / 255, (rgb & 0xFF) * brightness / 255);
+        };
+        const HAL::Color resting = scaled(led_color_by_name(settings->getString("led", "c_typing")));
+        const uint32_t fixed_rgb = led_color_by_name(key_color);
+        hal->on_key_sound = [this, scaled, resting, fixed_rgb, random = (key_color == "Random")]()
+        {
+            uint32_t rgb = fixed_rgb;
+            if (random)
+            {
+                // a point on the colour wheel: one channel full, one off, one in between
+                const uint32_t hue = esp_random() % 1536;
+                const uint32_t ramp = hue % 256;
+                static const uint8_t ORDER[6][3] = {{0, 1, 2}, {1, 0, 2}, {2, 0, 1}, {2, 1, 0}, {1, 2, 0}, {0, 2, 1}};
+                uint8_t channel[3];
+                const uint32_t sector = hue / 256;
+                channel[ORDER[sector][0]] = 255;
+                channel[ORDER[sector][1]] = (sector % 2) ? 255 - ramp : ramp;
+                channel[ORDER[sector][2]] = 0;
+                rgb = (channel[0] << 16) | (channel[1] << 8) | channel[2];
+            }
+            _hal->led()->flash(scaled(rgb), LED_KEY_FLASH_MS, resting);
+        };
+    }
+#endif
     const bool entered = UTILS::UI::show_edit_string_dialog(_hal, "Message", text, false, 200);
     is_rendered = false;
+#if HAL_USE_LED
+    hal->on_key_sound = nullptr;
+    // back to showing the state, whatever the flashes left on the LED
+    _ledApplied = 0xFFFFFFFF;
+    _ledNextCheck = 0;
+#endif
 
     const size_t first = text.find_first_not_of(' ');
     if (!entered || first == std::string::npos)
@@ -219,6 +267,10 @@ void GeminiApp::init()
             is_rendered = false;
         }
     };
+
+#if HAL_USE_LED
+    initLedMenus();
+#endif
 
     if (_hal->wifi()->init())
     {
@@ -725,8 +777,10 @@ void GeminiApp::drawBattery(int x, int y, int w, int h, bool with_percent)
 
 #if HAL_USE_LED
 #define LED_CHECK_INTERVAL_MS 200
-#define LED_BLINK_ON_MS 250
-#define LED_BLINK_OFF_MS 750
+// Blink and breathe timing, for the effect speeds Slow, Normal and Fast
+static const uint32_t LED_BLINK_ON_MS[] = {500, 250, 125};
+static const uint32_t LED_BLINK_OFF_MS[] = {1500, 750, 375};
+static const uint32_t LED_BREATHE_MS[] = {4000, 2500, 1500};
 
 // Colours are picked by name in the LED settings; "Off" or an unknown name gives no
 // light. Names and values are the ones Bruce offers for this LED.
@@ -747,7 +801,57 @@ static uint32_t led_color_by_name(const std::string& name)
     return 0;
 }
 
-// Low battery (blinking) wins over the session state, which wins over the WiFi state.
+// What a row of "LED settings" shows for its state, e.g. "Purple, Breathe"
+static std::string led_menu_summary(HAL::Hal* hal, const SETTINGS::SettingGroup_t& menu)
+{
+    std::string summary;
+    for (const auto& item : menu.items)
+    {
+        if (item.key.rfind("c_", 0) != 0 && item.key.rfind("e_", 0) != 0)
+            continue;
+        if (!summary.empty())
+            summary += ", ";
+        summary += hal->settings()->getString(menu.nvs_namespace, item.key);
+    }
+    return summary;
+}
+
+// The settings hold one group per LED state next to "LED settings". They are taken
+// out of the list of groups and opened from the rows of "LED settings" instead.
+void GeminiApp::initLedMenus()
+{
+    for (size_t i = 3; i < _groups.size();)
+    {
+        if (_groups[i].nvs_namespace == "led" && _groups[i].name != _groups[3].name)
+        {
+            _ledMenus.push_back(_groups[i]);
+            _groups.erase(_groups.begin() + i);
+        }
+        else
+        {
+            i++;
+        }
+    }
+
+    for (auto& item : _groups[3].items)
+    {
+        if (item.type != SETTINGS::TYPE_CALLBACK)
+            continue;
+        for (auto& menu : _ledMenus)
+        {
+            if (menu.name != item.label)
+                continue;
+            item.value = led_menu_summary(_hal, menu);
+            item.callback = [this, &menu](SETTINGS::SettingItem_t& row)
+            {
+                UTILS::UI::show_settings_submenu(_hal, menu);
+                row.value = led_menu_summary(_hal, menu);
+            };
+        }
+    }
+}
+
+// Low battery wins over the session state, which wins over the WiFi state.
 // The LED is only touched when what it should show changes.
 void GeminiApp::updateLed()
 {
@@ -758,7 +862,6 @@ void GeminiApp::updateLed()
 
     auto* settings = _hal->settings();
     const char* color_key = nullptr;
-    bool blink = false;
     if (settings->getBool("led", "enabled"))
     {
 #if HAL_USE_BAT
@@ -768,14 +871,13 @@ void GeminiApp::updateLed()
         if (low_level > 0 && _batLevel >= 0 && _batLevel <= low_level)
         {
             color_key = "c_lowbat";
-            blink = true;
         }
         else
 #endif
 #if S2S_TEXT_INPUT
             // the microphone is off while typing
             if (_appState == APP_STATE_S2S_LISTENING && _textMode)
-            color_key = "c_online";
+            color_key = "c_typing";
         else
 #endif
             if (_appState == APP_STATE_S2S_LISTENING)
@@ -791,15 +893,36 @@ void GeminiApp::updateLed()
     const HAL::Color color(((rgb >> 16) & 0xFF) * brightness / 255, ((rgb >> 8) & 0xFF) * brightness / 255, (rgb & 0xFF) * brightness / 255);
     rgb = (color.r << 16) | (color.g << 8) | color.b;
 
-    const uint32_t wanted = rgb | ((blink && rgb) ? (1UL << 24) : 0);
+    // each state has its colour under c_<state>, its effect under e_<state> and the
+    // speed of that effect under s_<state>
+    enum { EFFECT_STEADY, EFFECT_BLINK, EFFECT_BREATHE };
+    uint32_t effect = EFFECT_STEADY;
+    uint32_t speed = 1;
+    if (rgb)
+    {
+        const std::string effect_name = settings->getString("led", std::string("e_") + (color_key + 2));
+        if (effect_name == "Blink")
+            effect = EFFECT_BLINK;
+        else if (effect_name == "Breathe")
+            effect = EFFECT_BREATHE;
+        const std::string speed_name = settings->getString("led", std::string("s_") + (color_key + 2));
+        if (speed_name == "Slow")
+            speed = 0;
+        else if (speed_name == "Fast")
+            speed = 2;
+    }
+
+    const uint32_t wanted = rgb | (effect << 24) | (speed << 26);
     if (wanted == _ledApplied)
         return;
     _ledApplied = wanted;
 
     if (!rgb)
         _hal->led()->off();
-    else if (blink)
-        _hal->led()->blink_periodic(color, LED_BLINK_ON_MS, LED_BLINK_OFF_MS);
+    else if (effect == EFFECT_BLINK)
+        _hal->led()->blink_periodic(color, LED_BLINK_ON_MS[speed], LED_BLINK_OFF_MS[speed]);
+    else if (effect == EFFECT_BREATHE)
+        _hal->led()->breathe(color, LED_BREATHE_MS[speed]);
     else
         _hal->led()->set_color(color);
 }
