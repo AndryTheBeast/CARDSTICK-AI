@@ -186,7 +186,7 @@ void HalCardputer::_init_sdcard()
 void HalCardputer::_init_led()
 {
     ESP_LOGI(TAG, "init led");
-    _led = new LED(RGB_LED_GPIO, RGB_LED_POWER_GPIO);
+    _led = new LED(RGB_LED_GPIO, RGB_LED_POWER_GPIO, RGB_LED_POWER_PWM_HZ);
     _led->off();
 }
 #endif

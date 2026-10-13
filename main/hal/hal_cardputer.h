@@ -14,6 +14,8 @@
 #define RGB_LED_GPIO 21
 // display backlight: on the ADV and v1.1 it also switches the supply of the RGB LED
 #define RGB_LED_POWER_GPIO 38
+// backlight PWM frequency, as set in display/display.hpp
+#define RGB_LED_POWER_PWM_HZ 256
 
 #if HAL_USE_SPEAKER
 extern const uint8_t error_wav_start[] asm("_binary_error_wav_start");

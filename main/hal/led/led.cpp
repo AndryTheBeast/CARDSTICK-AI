@@ -18,34 +18,49 @@ static const char* TAG = "LED";
 
 namespace HAL
 {
+    static constexpr uint32_t TICKS_PER_US = LED::RMT_RESOLUTION_HZ / 1000000;
+    static constexpr uint32_t BIT_SHORT_TICKS = LED::RMT_RESOLUTION_HZ / 10000000 * 3; // 0.3us
+    static constexpr uint32_t BIT_LONG_TICKS = LED::RMT_RESOLUTION_HZ / 10000000 * 9;  // 0.9us
+    static constexpr uint32_t LEAD_TICKS = 100 * TICKS_PER_US;
+    static constexpr uint32_t RESET_TICKS = 300 * TICKS_PER_US;
+    // lead-in, 24 data bits, reset
+    static constexpr size_t FRAME_SYMBOLS = 1 + 24 + 1;
+    static constexpr uint32_t FRAME_TICKS = LEAD_TICKS + 24 * (BIT_SHORT_TICKS + BIT_LONG_TICKS) + RESET_TICKS;
+
+    static constexpr uint32_t NOTIFY_DIRTY = 1 << 0;
+    static constexpr uint32_t NOTIFY_EDGE = 1 << 1;
+    // How far the PWM edge may be from the start of the loop before the loop is restarted
+    static constexpr int32_t SYNC_TOLERANCE_QUS = 200 * 4;
+    static constexpr int64_t SYNC_SETTLE_US = 100000;
+
     // WS2812 timing symbols
     static const rmt_symbol_word_t ws2812_zero = {
-        .duration0 = (uint16_t)(0.3 * LED::RMT_RESOLUTION_HZ / 1000000), // T0H=0.3us
+        .duration0 = (uint16_t)BIT_SHORT_TICKS, // T0H=0.3us
         .level0 = 1,
-        .duration1 = (uint16_t)(0.9 * LED::RMT_RESOLUTION_HZ / 1000000), // T0L=0.9us
+        .duration1 = (uint16_t)BIT_LONG_TICKS, // T0L=0.9us
         .level1 = 0,
     };
 
     static const rmt_symbol_word_t ws2812_one = {
-        .duration0 = (uint16_t)(0.9 * LED::RMT_RESOLUTION_HZ / 1000000), // T1H=0.9us
+        .duration0 = (uint16_t)BIT_LONG_TICKS, // T1H=0.9us
         .level0 = 1,
-        .duration1 = (uint16_t)(0.3 * LED::RMT_RESOLUTION_HZ / 1000000), // T1L=0.3us
+        .duration1 = (uint16_t)BIT_SHORT_TICKS, // T1L=0.3us
         .level1 = 0,
     };
 
     static const rmt_symbol_word_t ws2812_reset = {
-        .duration0 = (uint16_t)(LED::RMT_RESOLUTION_HZ / 1000000 * 300 / 2),
+        .duration0 = (uint16_t)(RESET_TICKS / 2),
         .level0 = 0,
-        .duration1 = (uint16_t)(LED::RMT_RESOLUTION_HZ / 1000000 * 300 / 2),
+        .duration1 = (uint16_t)(RESET_TICKS / 2),
         .level1 = 0,
     };
 
-    // Sent ahead of the data: when a frame is triggered by the LED's supply coming back
-    // (see sync_task), this gives the LED time to power up before the first bit
+    // Sent ahead of the data: a frame sent straight after the LED's supply came back
+    // (see init) left it dark, this gives it time to power up before the first bit
     static const rmt_symbol_word_t ws2812_lead = {
-        .duration0 = (uint16_t)(LED::RMT_RESOLUTION_HZ / 1000000 * 100 / 2),
+        .duration0 = (uint16_t)(LEAD_TICKS / 2),
         .level0 = 0,
-        .duration1 = (uint16_t)(LED::RMT_RESOLUTION_HZ / 1000000 * 100 / 2),
+        .duration1 = (uint16_t)(LEAD_TICKS / 2),
         .level1 = 0,
     };
 
@@ -63,15 +78,26 @@ namespace HAL
             return 0;
         }
 
-        // One transmission is the frame FRAME_REPEATS times over, each as: lead-in,
-        // 24 data bits, reset. With a single frame straight after the supply returned the
-        // LED stayed dark, presumably not yet ready for data; repeated, it takes the
-        // first frame it is ready for.
-        static constexpr size_t FRAME_SYMBOLS = 1 + 24 + 1;
+        // One transmission is the frame FRAME_REPEATS times over. With a single frame
+        // straight after the supply returned the LED stayed dark, presumably not yet
+        // ready for data; repeated, it takes the first frame it is ready for.
+        const LED* led = static_cast<const LED*>(arg);
         const size_t frame_no = symbols_written / FRAME_SYMBOLS;
         const size_t pos = symbols_written % FRAME_SYMBOLS;
         const uint8_t* data_bytes = static_cast<const uint8_t*>(data);
 
+        if (frame_no >= FRAME_REPEATS)
+        {
+            // Looped: idle for the rest of the PWM cycle, so that the loop is exactly
+            // as long as the cycle and stays in step with it
+            const uint32_t idle = led->_period_ticks - FRAME_REPEATS * FRAME_TICKS;
+            symbols[0].duration0 = idle / 2;
+            symbols[0].level0 = 0;
+            symbols[0].duration1 = idle - idle / 2;
+            symbols[0].level1 = 0;
+            *done = 1;
+            return 1;
+        }
         if (pos == 0)
         {
             symbols[0] = ws2812_lead;
@@ -91,7 +117,7 @@ namespace HAL
 
         // Encode the reset signal
         symbols[0] = ws2812_reset;
-        if (frame_no + 1 >= FRAME_REPEATS)
+        if (frame_no + 1 >= FRAME_REPEATS && !led->_period_ticks)
             *done = 1;
         return 1;
     }
@@ -106,34 +132,72 @@ namespace HAL
         }
     }
 
-    // The LED's supply came back on: wake the task that sends the colour again
+    // Rising edge of the LED's supply. Either the task is waiting for it to start the
+    // loop, or the loop runs and is checked to still begin at the edge: it does not
+    // after the PWM was at 100% (no edges to start on) or if the start came late.
     void IRAM_ATTR LED::sync_isr(void* arg)
     {
         LED* led = static_cast<LED*>(arg);
+        const int64_t now = esp_timer_get_time();
         BaseType_t woken = pdFALSE;
-        if (led->_sync_task)
-            vTaskNotifyGiveFromISR(led->_sync_task, &woken);
+        if (led->_await_edge)
+        {
+            led->_await_edge = false;
+            xTaskNotifyFromISR(led->_sync_task, NOTIFY_EDGE, eSetBits, &woken);
+        }
+        else if (led->_loop_running && now - led->_loop_start_us > SYNC_SETTLE_US)
+        {
+            int32_t phase = (int32_t)(((now - led->_loop_start_us) * 4) % led->_period_qus);
+            if (phase > led->_period_qus / 2)
+                phase -= led->_period_qus;
+            if (phase > SYNC_TOLERANCE_QUS || phase < -SYNC_TOLERANCE_QUS)
+            {
+                led->_loop_running = false;
+                xTaskNotifyFromISR(led->_sync_task, NOTIFY_DIRTY, eSetBits, &woken);
+            }
+        }
         if (woken)
             portYIELD_FROM_ISR();
+    }
+
+    // (Re)start the endless transmission of the colour, beginning at a PWM edge
+    void LED::start_loop()
+    {
+        rmt_transmit_config_t tx_config = {.loop_count = -1, .flags = {.eot_level = 0, .queue_nonblocking = 0}};
+        uint32_t bits = 0;
+
+        _loop_running = false;
+        _await_edge = true;
+        // no edges at 0% and 100%: start anyway, sync_isr restarts it once they are back
+        xTaskNotifyWait(NOTIFY_EDGE, NOTIFY_EDGE, &bits, pdMS_TO_TICKS(10));
+        _await_edge = false;
+        rmt_disable(_led_chan);
+        rmt_enable(_led_chan);
+        rmt_transmit(_led_chan, _encoder, _led_pixel, sizeof(_led_pixel), &tx_config);
+        _loop_start_us = esp_timer_get_time();
+        _loop_running = true;
     }
 
     void LED::sync_task(void* arg)
     {
         LED* led = static_cast<LED*>(arg);
-        rmt_transmit_config_t tx_config = {.loop_count = 0, .flags = {.eot_level = 0, .queue_nonblocking = 1}};
         while (true)
         {
-            ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-            if (!led->_initialized || led->_suspended)
+            uint32_t bits = 0;
+            xTaskNotifyWait(0, NOTIFY_DIRTY, &bits, portMAX_DELAY);
+            if (!(bits & NOTIFY_DIRTY))
                 continue;
-            if (!(led->_led_pixel[0] || led->_led_pixel[1] || led->_led_pixel[2]))
-                continue;
-            rmt_transmit(led->_led_chan, led->_encoder, led->_led_pixel, sizeof(led->_led_pixel), &tx_config);
+            xSemaphoreTake(led->_mutex, portMAX_DELAY);
+            if (led->_initialized && !led->_suspended)
+                led->start_loop();
+            xSemaphoreGive(led->_mutex);
         }
     }
 
-    LED::LED(int gpio_num, int power_pwm_gpio)
-        : _initialized(false), _suspended(false), _gpio_num(gpio_num), _sync_gpio(power_pwm_gpio), _sync_task(nullptr), _led_chan(nullptr), _encoder(nullptr), _timer(nullptr),
+    LED::LED(int gpio_num, int power_pwm_gpio, uint32_t power_pwm_hz)
+        : _initialized(false), _suspended(false), _gpio_num(gpio_num), _sync_gpio(power_pwm_hz ? power_pwm_gpio : -1),
+          _period_ticks(power_pwm_hz ? RMT_RESOLUTION_HZ / power_pwm_hz : 0), _period_qus(power_pwm_hz ? 4000000 / power_pwm_hz : 0),
+          _sync_task(nullptr), _await_edge(false), _loop_running(false), _loop_start_us(0), _led_chan(nullptr), _encoder(nullptr), _timer(nullptr),
           _mutex(nullptr), _mode(LEDMode::OFF), _color(), _param1(0), _param2(0), _param3(0), _param4(0), _pattern_step(0),
           _fade_step(0)
     {
@@ -179,7 +243,8 @@ namespace HAL
             .gpio_num = (gpio_num_t)_gpio_num,
             .clk_src = RMT_CLK_SRC_DEFAULT,
             .resolution_hz = RMT_RESOLUTION_HZ,
-            .mem_block_symbols = 48,
+            // a looped transmission has to fit the channel's memory as a whole
+            .mem_block_symbols = 96,
             .trans_queue_depth = 4,
             .flags = {.invert_out = 0, .with_dma = 0, .io_loop_back = 0, .io_od_mode = 0},
         };
@@ -196,7 +261,7 @@ namespace HAL
         // Create simple encoder
         rmt_simple_encoder_config_t encoder_config = {
             .callback = ws2812_encoder_callback,
-            .arg = nullptr,
+            .arg = this,
             .min_chunk_size = 64,
         };
 
@@ -245,16 +310,22 @@ namespace HAL
 
         // On the Cardputer ADV (and v1.1) the LED is powered from the display backlight
         // pin, which is PWM dimmed: below full brightness the LED loses its supply, and
-        // with it the colour, on every PWM cycle. The colour is sent again each time the
-        // pin goes high. Tied to that edge the LED is lit for the same share of every
-        // cycle; resending on a timer of its own made it flicker.
+        // with it the colour, on every PWM cycle. So the colour is transmitted in an
+        // endless loop that is exactly one PWM cycle long and starts at the rising edge.
+        // Both run from the same clock and stay in step without software in between,
+        // which keeps the LED lit for the same share of every cycle. Resending from a
+        // task woken on each edge, or on a period of its own, made it flicker.
         if (_sync_gpio >= 0)
         {
             xTaskCreate(sync_task, "led_sync", 3072, this, configMAX_PRIORITIES - 2, &_sync_task);
             // read the pin back without disturbing the PWM output routed to it
             gpio_ll_input_enable(&GPIO, (gpio_num_t)_sync_gpio);
             gpio_set_intr_type((gpio_num_t)_sync_gpio, GPIO_INTR_POSEDGE);
+            // the keyboard may have installed the service already, which is logged as an error
+            const esp_log_level_t gpio_log_level = esp_log_level_get("gpio");
+            esp_log_level_set("gpio", ESP_LOG_NONE);
             ret = gpio_install_isr_service(0);
+            esp_log_level_set("gpio", gpio_log_level);
             if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE)
                 ESP_LOGW(TAG, "GPIO ISR service: %s", esp_err_to_name(ret));
             gpio_isr_handler_add((gpio_num_t)_sync_gpio, sync_isr, this);
@@ -281,9 +352,12 @@ namespace HAL
             gpio_isr_handler_remove((gpio_num_t)_sync_gpio);
             if (_sync_task)
             {
+                // not while it holds the mutex
+                xSemaphoreTake(_mutex, portMAX_DELAY);
                 TaskHandle_t task = _sync_task;
                 _sync_task = nullptr;
                 vTaskDelete(task);
+                xSemaphoreGive(_mutex);
             }
         }
 
@@ -325,6 +399,14 @@ namespace HAL
     {
         if (!check_initialized() || _suspended)
         {
+            return;
+        }
+
+        if (_sync_gpio >= 0)
+        {
+            // the loop is restarted with the new colour by sync_task
+            if (_sync_task)
+                xTaskNotify(_sync_task, NOTIFY_DIRTY, eSetBits);
             return;
         }
 

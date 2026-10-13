@@ -52,9 +52,10 @@ namespace HAL
         /**
          * @param gpio_num Data pin of the LED
          * @param power_pwm_gpio PWM driven pin that also switches the LED's supply, or -1.
-         *                       The colour is sent again on each rising edge of it.
+         *                       The colour is then sent again in every PWM cycle.
+         * @param power_pwm_hz Frequency of that PWM. It must divide RMT_RESOLUTION_HZ.
          */
-        LED(int gpio_num = -1, int power_pwm_gpio = -1);
+        LED(int gpio_num = -1, int power_pwm_gpio = -1, uint32_t power_pwm_hz = 0);
         ~LED();
 
         /**
@@ -150,9 +151,10 @@ namespace HAL
         // Timer callback
         static void timer_callback(void* arg);
 
-        // Resend of the colour when the LED's supply comes back
+        // Resend of the colour in step with the PWM of the LED's supply
         static void sync_isr(void* arg);
         static void sync_task(void* arg);
+        void start_loop();
 
         // Internal helper methods
         void update_led();
@@ -168,7 +170,12 @@ namespace HAL
         bool _suspended;
         int _gpio_num;
         int _sync_gpio;
+        uint32_t _period_ticks; // one cycle of the supply PWM in RMT ticks, 0 without it
+        int32_t _period_qus;    // the same in quarter microseconds
         TaskHandle_t _sync_task;
+        volatile bool _await_edge;
+        volatile bool _loop_running;
+        volatile int64_t _loop_start_us;
         rmt_channel_handle_t _led_chan;
         rmt_encoder_handle_t _encoder;
         esp_timer_handle_t _timer;
@@ -187,7 +194,7 @@ namespace HAL
 
     public:
         // WS2812 timing constants
-        static constexpr uint32_t RMT_RESOLUTION_HZ = 10000000; // 10MHz
+        static constexpr uint32_t RMT_RESOLUTION_HZ = 20000000; // 20MHz
         static constexpr uint32_t FADE_STEPS = 50;
         static constexpr uint32_t FRAME_REPEATS = 3;
     };
