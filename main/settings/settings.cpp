@@ -19,6 +19,14 @@ static const char* WIFI_NETWORKS_KEY = "nets";
 static const char WIFI_FIELD_SEP = '\x1f';
 static const char WIFI_RECORD_SEP = '\x1e';
 
+// Passwords and the API key stay out of the serial log
+static const char* loggable(const std::string& key, const std::string& value)
+{
+    if (key == "pass" || key == "api_key")
+        return value.empty() ? "(empty)" : "(hidden)";
+    return value.c_str();
+}
+
 // stdio rather than <fstream>: the stream classes pull the whole locale machinery into the image
 static bool read_line(FILE* file, std::string& line)
 {
@@ -413,7 +421,7 @@ namespace SETTINGS
                     {
                         cached_value.str_val = item.default_val;
                     }
-                    ESP_LOGI(TAG, "Loaded string %s = %s", cache_key.c_str(), cached_value.str_val.c_str());
+                    ESP_LOGI(TAG, "Loaded string %s = %s", cache_key.c_str(), loggable(item.key, cached_value.str_val));
                     break;
                 }
                 default:
@@ -891,7 +899,7 @@ namespace SETTINGS
 
             if (import_ok)
             {
-                ESP_LOGI(TAG, "Imported setting: %s = %s", cache_key.c_str(), value_str.c_str());
+                ESP_LOGI(TAG, "Imported setting: %s = %s", cache_key.c_str(), loggable(key, value_str));
                 success = true;
             }
             else
