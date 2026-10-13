@@ -1,6 +1,8 @@
 v3.4
 
-- Cardputer: type to Gemini. TAB on the chat screen switches to typing: the microphone is off, ENTER opens a message box, and the reply is shown as text without being spoken
+- Cardputer: type to Gemini. The start screen offers Live and Text; TAB on the chat screen switches between them. In Text the microphone is off, ENTER opens a message box, and the reply is shown as text without being spoken
+- Cardputer: LED effects. Each LED state can be Steady, Blink or Breathe, at its own speed, set in a menu per state. Text mode has its own LED state, Typing, which can also flash on each key press in a chosen or random colour
+- Cardputer: SD card export and import are now under one "SD card" entry, below Web setup
 - Cardputer: Web setup, as on the StickS3. Edit WiFi networks, the API key and every other setting from a phone or PC browser
 - Cardputer: Sleep entry in Settings. Deep sleep, G0 wakes it up
 - Cardputer ADV: the RGB LED no longer flickers when the screen is dimmed. It still dims with the screen brightness

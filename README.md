@@ -80,7 +80,7 @@ idf.py -p [Your-Serial-Port] flash monitor
 
 ## Usage
 
-- From the start screen press `ESC` to enter Settings or `ENTER` to start a voice session.
+- From the start screen press `ESC` to enter Settings or `ENTER` to start a session. On the Cardputer the arrow keys choose between `Live` (voice) and `Text` (typing) first.
 - During a session the keyboard is used for control:
   - `ENTER` — interrupt (skip playback or send during listening)
   - `ESC` — stop session and return to start screen
