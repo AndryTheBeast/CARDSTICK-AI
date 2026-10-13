@@ -152,6 +152,12 @@ namespace SETTINGS
              "500",
              "System instructions for the model"},
         };
+#if HAL_USE_SDCARD
+        gemini_group.items.push_back(
+            {"remember", "Remember chats", TYPE_BOOL, "true", "true", "", "", "Save chats to the SD card and offer to continue one when starting"});
+        // the app deletes them: it is the one that knows where they are
+        gemini_group.items.push_back({"", "Forget chats", TYPE_CALLBACK, "", "", "", "", "Delete all saved chats from the SD card"});
+#endif
 
 #if HAL_USE_LED
 #define LED_COLOR_CHOICES "Off;Purple;White;Red;Orange;Yellow;Lime Green;Green;Cyan;Blue;Magenta;Pink"

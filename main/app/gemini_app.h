@@ -5,6 +5,7 @@
 #include "app/utils/anim/hl_text.h"
 #include "app/utils/anim/scroll_text.h"
 #include "app/s2s_client.h"
+#include "app/chat_store.h"
 #include <string>
 #include <vector>
 #include <functional>
@@ -88,6 +89,19 @@ private:
     bool _startInText = false;
     void setTextMode(bool enabled);
     void typeMessage();
+#endif
+#if S2S_CHAT_MEMORY
+    // The conversation as turns, for the SD card and for a session that has to be told
+    // what was said before. _chat holds the same text broken into screen lines.
+    std::vector<CHAT_STORE::Turn> _turns;
+    // Chat being written to the SD card: 0 until its first turn
+    int _chatId = 0;
+    bool _chatSaving = false;
+    std::string _savedHandle;
+    uint32_t _handleNextCheck = 0;
+    bool chooseChat();
+    void rememberTurn(bool user, const std::string& text);
+    void saveSessionHandle();
 #endif
 
     // Drawing

@@ -33,6 +33,9 @@
 #define S2S_TEXT_INPUT 1
 #endif
 
+// Chats are kept on the SD card, which only the Cardputer has
+#define S2S_CHAT_MEMORY (HAL_USE_SDCARD && S2S_TEXT_INPUT)
+
 #define S2S_MIC_SAMPLE_RATE  16000
 #define S2S_SPK_SAMPLE_RATE  24000
 
@@ -45,6 +48,11 @@ struct S2SSharedData
     std::string error_message;
 #if S2S_TEXT_INPUT
     std::string pending_text;
+#endif
+#if S2S_CHAT_MEMORY
+    // The conversation so far as a clientContent message. It is sent to a session that
+    // starts without a handle, or whose handle Google no longer accepts.
+    std::string history;
 #endif
 };
 

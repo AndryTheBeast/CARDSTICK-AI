@@ -85,6 +85,10 @@ typedef struct
     std::string voice;
     std::string rules;
     int32_t volume;
+#if S2S_CHAT_MEMORY
+    bool resumed;      // the setup carried a session handle
+    bool seed_history; // the setup announced the conversation so far
+#endif
 } s2s_context_t;
 
 static s2s_context_t s2s_ctx;
@@ -536,6 +540,24 @@ static bool s2s_send_setup(s2s_context_t* ctx)
         mjson_snprintf(handle_snippet, sizeof(handle_snippet), "\"handle\":%Q", handle.c_str());
     }
 
+#if S2S_CHAT_MEMORY
+    // A session that cannot be resumed is told what was said before. With this in the
+    // setup the server takes the first clientContent as history and does not answer it.
+    ctx->resumed = !handle.empty();
+    ctx->seed_history = false;
+    if (handle.empty() && xSemaphoreTake(ctx->shared->mutex, pdMS_TO_TICKS(100)) == pdTRUE)
+    {
+        ctx->seed_history = !ctx->shared->history.empty();
+        xSemaphoreGive(ctx->shared->mutex);
+    }
+    if (ctx->seed_history)
+    {
+        // goes out with the rules, ahead of realtimeInputConfig
+        const size_t used = strlen(rules_snippet);
+        snprintf(rules_snippet + used, sizeof(rules_snippet) - used, "\"historyConfig\":{\"initialHistoryInClientContent\":true},");
+    }
+#endif
+
     // Assemble final JSON into the static send buffer
     char* buf = s_json_buf;
     int cap = (int)sizeof(s_json_buf);
@@ -655,6 +677,23 @@ static void s2s_client_task(void* parameter)
                                pdMS_TO_TICKS(15000));
     if (!(bits & S2S_SETUP_COMPLETE_BIT))
     {
+#if S2S_CHAT_MEMORY
+        // Google keeps a handle for two hours after its session ended. One it refuses
+        // is dropped, and the next attempt starts a session from the saved text instead.
+        if (ctx->resumed && !(bits & S2S_STOP_REQUEST_BIT))
+        {
+            ESP_LOGW(TAG, "Session could not be resumed, starting a new one");
+            if (xSemaphoreTake(ctx->shared->mutex, pdMS_TO_TICKS(100)) == pdTRUE)
+            {
+                ctx->shared->session_handle.clear();
+                ctx->shared->error_message.clear();
+                xSemaphoreGive(ctx->shared->mutex);
+            }
+            xEventGroupClearBits(ctx->event_group, S2S_FATAL_ERROR_BIT);
+            xEventGroupSetBits(ctx->event_group, S2S_ERROR_BIT);
+            goto exit;
+        }
+#endif
         if (!(bits & S2S_FATAL_ERROR_BIT))
         {
             ESP_LOGE(TAG, "Setup timeout");
@@ -662,6 +701,25 @@ static void s2s_client_task(void* parameter)
         }
         goto exit;
     }
+
+#if S2S_CHAT_MEMORY
+    if (ctx->seed_history)
+    {
+        std::string history;
+        if (xSemaphoreTake(ctx->shared->mutex, pdMS_TO_TICKS(100)) == pdTRUE)
+        {
+            history = ctx->shared->history;
+            xSemaphoreGive(ctx->shared->mutex);
+        }
+        ESP_LOGI(TAG, "Sending the conversation so far (%d bytes)", (int)history.size());
+        if (esp_websocket_client_send_text(ctx->ws_client, history.c_str(), history.size(), pdMS_TO_TICKS(5000)) != (int)history.size())
+        {
+            ESP_LOGE(TAG, "Failed to send the conversation so far");
+            xEventGroupSetBits(ctx->event_group, S2S_ERROR_BIT);
+            goto exit;
+        }
+    }
+#endif
 
     ESP_LOGI(TAG, "Session ready, entering main loop");
 

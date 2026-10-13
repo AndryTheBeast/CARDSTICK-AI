@@ -142,6 +142,9 @@ void GeminiApp::startS2S()
         _s2s_shared.input_transcript.clear();
         _s2s_shared.output_transcript.clear();
         _s2s_shared.error_message.clear();
+#if S2S_CHAT_MEMORY
+        _s2s_shared.history = CHAT_STORE::history_message(_turns);
+#endif
         xSemaphoreGive(_s2s_shared.mutex);
     }
 
@@ -244,8 +247,99 @@ void GeminiApp::typeMessage()
     for (const auto& line : splitTextIntoLines(text))
         _chat.push_back({HISTORY_ITEM_TYPE_USER, line});
     trimChat();
+#if S2S_CHAT_MEMORY
+    rememberTurn(true, text);
+#endif
     _partialPrompt = "";
     updateScrollPosition();
+}
+#endif
+
+#if S2S_CHAT_MEMORY
+#define HANDLE_CHECK_INTERVAL_MS 1000
+
+// Called when a session is about to start from the start screen: a new chat, or one
+// picked from those on the SD card, which is put back on the screen. False if the user
+// backed out of the list.
+bool GeminiApp::chooseChat()
+{
+    std::string handle;
+    _turns.clear();
+    _chatId = 0;
+    _chatSaving = false;
+
+    if (_hal->settings()->getBool(GEMINI_NS, "remember") && CHAT_STORE::mount(_hal))
+    {
+        const int id = CHAT_STORE::pick(_hal);
+        if (id < 0)
+            return false;
+        _chatSaving = true;
+        if (id > 0 && CHAT_STORE::load(id, _turns, handle))
+            _chatId = id;
+    }
+
+    // a new chat must not pick up the session of the one before it
+    if (xSemaphoreTake(_s2s_shared.mutex, pdMS_TO_TICKS(200)) == pdTRUE)
+    {
+        _s2s_shared.session_handle = handle;
+        xSemaphoreGive(_s2s_shared.mutex);
+    }
+    _savedHandle = handle;
+
+    _chat.clear();
+    for (const auto& turn : _turns)
+    {
+        for (const auto& line : splitTextIntoLines(turn.text))
+            _chat.push_back({turn.user ? HISTORY_ITEM_TYPE_USER : HISTORY_ITEM_TYPE_MODEL, line});
+    }
+    trimChat();
+    _userPrompt = "";
+    _partialPrompt = "";
+    // everything shown as past, scrolled to its end
+    _lastHistoryIndex = _chat.size();
+    _scrollPosition = _chat.size();
+    return true;
+}
+
+void GeminiApp::rememberTurn(bool user, const std::string& text)
+{
+    const CHAT_STORE::Turn turn = {user, text};
+    _turns.push_back(turn);
+    if (_turns.size() > 60)
+        _turns.erase(_turns.begin());
+
+    if (!_chatSaving)
+        return;
+    if (_chatId == 0)
+        _chatId = CHAT_STORE::create();
+    if (_chatId == 0 || !CHAT_STORE::append(_chatId, turn))
+    {
+        // card pulled out or full: the chat goes on, unsaved
+        ESP_LOGW(TAG, "Chat is no longer saved");
+        _chatSaving = false;
+    }
+}
+
+// The handle that resumes the session changes as the conversation goes on. The latest
+// one is kept beside the chat, so that a restart can pick the session up where it was.
+void GeminiApp::saveSessionHandle()
+{
+    const uint32_t now = millis();
+    if (now < _handleNextCheck)
+        return;
+    _handleNextCheck = now + HANDLE_CHECK_INTERVAL_MS;
+    if (!_chatSaving || _chatId == 0)
+        return;
+
+    std::string handle;
+    if (xSemaphoreTake(_s2s_shared.mutex, pdMS_TO_TICKS(50)) != pdTRUE)
+        return;
+    handle = _s2s_shared.session_handle;
+    xSemaphoreGive(_s2s_shared.mutex);
+    if (handle == _savedHandle)
+        return;
+    CHAT_STORE::save_handle(_chatId, handle);
+    _savedHandle = handle;
 }
 #endif
 
@@ -270,6 +364,31 @@ void GeminiApp::init()
 
 #if HAL_USE_LED
     initLedMenus();
+#endif
+
+#if S2S_CHAT_MEMORY
+    for (auto& item : _groups[2].items)
+    {
+        if (item.type != SETTINGS::TYPE_CALLBACK)
+            continue;
+        item.callback = [this](SETTINGS::SettingItem_t&)
+        {
+            if (!UTILS::UI::show_confirmation_dialog(_hal, "Forget chats", "Delete all saved chats from the SD card?", "Forget"))
+                return;
+            if (!CHAT_STORE::mount(_hal))
+            {
+                UTILS::UI::show_error_dialog(_hal, "Error", "Failed to mount SD card", "OK");
+                return;
+            }
+            const int forgotten = CHAT_STORE::remove_all();
+            if (xSemaphoreTake(_s2s_shared.mutex, pdMS_TO_TICKS(200)) == pdTRUE)
+            {
+                _s2s_shared.session_handle.clear();
+                xSemaphoreGive(_s2s_shared.mutex);
+            }
+            UTILS::UI::show_message_dialog(_hal, "Forget chats", std::to_string(forgotten) + " chats forgotten", 0);
+        };
+    }
 #endif
 
     if (_hal->wifi()->init())
@@ -458,6 +577,9 @@ void GeminiApp::update()
                     for (const auto& line : splitTextIntoLines(_userPrompt))
                         _chat.push_back({HISTORY_ITEM_TYPE_USER, line});
                     trimChat();
+#if S2S_CHAT_MEMORY
+                    rememberTurn(true, _userPrompt);
+#endif
                 }
                 _partialPrompt = "";
                 updateScrollPosition();
@@ -490,6 +612,9 @@ void GeminiApp::update()
                     for (const auto& line : splitTextIntoLines(_userPrompt))
                         _chat.push_back({HISTORY_ITEM_TYPE_USER, line});
                     trimChat();
+#if S2S_CHAT_MEMORY
+                    rememberTurn(true, _userPrompt);
+#endif
                     updateScrollPosition();
                     is_rendered = false;
                 }
@@ -521,6 +646,9 @@ void GeminiApp::update()
                     for (const auto& line : splitTextIntoLines(model_text))
                         _chat.push_back({HISTORY_ITEM_TYPE_MODEL, line});
                     trimChat();
+#if S2S_CHAT_MEMORY
+                    rememberTurn(false, model_text);
+#endif
                 }
                 _partialPrompt = "";
                 updateScrollPosition();
@@ -567,6 +695,9 @@ void GeminiApp::update()
             break;
         }
 
+#if S2S_CHAT_MEMORY
+        saveSessionHandle();
+#endif
 #if HAL_USE_BAT
         updateBattery();
 #endif
@@ -950,6 +1081,10 @@ void GeminiApp::handleMainScreenInput()
             return;
         }
 
+#if S2S_CHAT_MEMORY
+        if (!chooseChat())
+            return;
+#endif
         _currentScreen = SCREEN_CHAT;
 #if S2S_TEXT_INPUT
         _textMode = _startInText;
@@ -1245,6 +1380,10 @@ void GeminiApp::handleResponseScreenInput()
             _hal->keyboard()->waitForRelease(KEY_NUM_ESC);
             _hal->playNextSound();
             stopS2S();
+#if S2S_CHAT_MEMORY
+            _handleNextCheck = 0;
+            saveSessionHandle();
+#endif
 #if S2S_TEXT_INPUT
             _textMode = false;
 #endif
