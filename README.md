@@ -85,6 +85,9 @@ idf.py -p [Your-Serial-Port] flash monitor
   - `ENTER` — interrupt (skip playback or send during listening)
   - `ESC` — stop session and return to start screen
   - Arrow keys — scroll chat history
+  - `TAB` — switch between voice and typing. In typing mode the microphone is off, `ENTER` opens a box to type a message, and the reply is shown as text without being spoken. The session is still an audio session, so the unheard replies are generated and billed as audio.
+- `Settings` → `Web setup` edits the settings from a phone or PC browser, as on the StickS3 (see below). On the Cardputer `ENTER` switches the QR code and `DEL` leaves.
+- `Settings` → `Sleep` puts the Cardputer into deep sleep; press `G0` to wake it. It restarts when woken.
 
 [![YouTube video](https://img.youtube.com/vi/NF_7Dyx2gLY/0.jpg)](https://www.youtube.com/watch?v=NF_7Dyx2gLY)
 

@@ -1,3 +1,12 @@
+v3.4
+
+- Cardputer: type to Gemini. TAB on the chat screen switches to typing: the microphone is off, ENTER opens a message box, and the reply is shown as text without being spoken
+- Cardputer: Web setup, as on the StickS3. Edit WiFi networks, the API key and every other setting from a phone or PC browser
+- Cardputer: Sleep entry in Settings. Deep sleep, G0 wakes it up
+- Cardputer ADV: the RGB LED no longer flickers when the screen is dimmed. It still dims with the screen brightness
+- The WiFi password and API key are no longer written to the serial log
+- No more error lines at boot for settings that were never saved
+
 v3.3
 
 - Cardputer: the RGB LED shows the state. Orange without WiFi, green when connected, purple while listening, yellow while Gemini speaks, blinking red on low battery. On/off, brightness, the low battery level and each colour are in the new LED settings
