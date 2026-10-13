@@ -49,7 +49,12 @@ namespace HAL
     class LED
     {
     public:
-        LED(int gpio_num = -1);
+        /**
+         * @param gpio_num Data pin of the LED
+         * @param power_pwm_gpio PWM driven pin that also switches the LED's supply, or -1.
+         *                       The colour is sent again on each rising edge of it.
+         */
+        LED(int gpio_num = -1, int power_pwm_gpio = -1);
         ~LED();
 
         /**
@@ -145,6 +150,10 @@ namespace HAL
         // Timer callback
         static void timer_callback(void* arg);
 
+        // Resend of the colour when the LED's supply comes back
+        static void sync_isr(void* arg);
+        static void sync_task(void* arg);
+
         // Internal helper methods
         void update_led();
         void set_pixel_color(const Color& color);
@@ -158,6 +167,8 @@ namespace HAL
         bool _initialized;
         bool _suspended;
         int _gpio_num;
+        int _sync_gpio;
+        TaskHandle_t _sync_task;
         rmt_channel_handle_t _led_chan;
         rmt_encoder_handle_t _encoder;
         esp_timer_handle_t _timer;
@@ -178,6 +189,7 @@ namespace HAL
         // WS2812 timing constants
         static constexpr uint32_t RMT_RESOLUTION_HZ = 10000000; // 10MHz
         static constexpr uint32_t FADE_STEPS = 50;
+        static constexpr uint32_t FRAME_REPEATS = 3;
     };
 
 } // namespace HAL

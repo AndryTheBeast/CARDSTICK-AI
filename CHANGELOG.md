@@ -1,3 +1,8 @@
+v3.3
+
+- Cardputer: the RGB LED shows the state. Orange without WiFi, green when connected, purple while listening, yellow while Gemini speaks, blinking red on low battery. On/off, brightness, the low battery level and each colour are in the new LED settings
+- On the Cardputer ADV the LED is powered from the screen backlight: it dims with the screen brightness and can still flicker slightly
+
 v3.2
 
 - Gemini answers sooner: your turn now ends after half a second of silence, instead of waiting up to several seconds

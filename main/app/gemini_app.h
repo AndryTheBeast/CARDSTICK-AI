@@ -92,6 +92,12 @@ private:
     void updateBattery();
     void drawBattery(int x, int y, int w, int h, bool with_percent);
 #endif
+#if HAL_USE_LED
+    // RGB status LED, refreshed from the app loop
+    uint32_t _ledNextCheck = 0;
+    uint32_t _ledApplied = 0xFFFFFFFF;
+    void updateLed();
+#endif
     void handleMainScreenInput();
     bool drawAnimation(bool need_update, bool small = false);
     void handleSettingsMenu();

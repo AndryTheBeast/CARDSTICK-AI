@@ -12,6 +12,8 @@
 #include "common_define.h"
 
 #define RGB_LED_GPIO 21
+// display backlight: on the ADV and v1.1 it also switches the supply of the RGB LED
+#define RGB_LED_POWER_GPIO 38
 
 #if HAL_USE_SPEAKER
 extern const uint8_t error_wav_start[] asm("_binary_error_wav_start");

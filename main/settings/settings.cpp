@@ -139,6 +139,24 @@ namespace SETTINGS
              "System instructions for the model"},
         };
 
+#if HAL_USE_LED
+#define LED_COLOR_CHOICES "Off;Purple;White;Red;Orange;Yellow;Lime Green;Green;Cyan;Blue;Magenta;Pink"
+        SettingGroup_t led_group;
+        led_group.name = "LED settings";
+        led_group.nvs_namespace = "led";
+        led_group.items = {
+            back_item,
+            {"enabled", "Enabled", TYPE_BOOL, "true", "true", "", "", "Show the device state on the RGB LED"},
+            {"brightness", "Brightness", TYPE_NUMBER, "64", "64", "0", "255", "LED brightness (0-100%)", nullptr, true},
+            {"low_bat", "Low batt. %", TYPE_NUMBER, "15", "15", "0", "50", "Battery level (%) under which the LED blinks. 0 to never blink"},
+            {"c_lowbat", "Low batt.", TYPE_STRING, "Red", "", LED_COLOR_CHOICES, "", "Blinking colour when the battery is low"},
+            {"c_offline", "No WiFi", TYPE_STRING, "Orange", "", LED_COLOR_CHOICES, "", "Colour when WiFi is not connected"},
+            {"c_online", "WiFi on", TYPE_STRING, "Green", "", LED_COLOR_CHOICES, "", "Colour when WiFi is connected"},
+            {"c_listen", "Listening", TYPE_STRING, "Purple", "", LED_COLOR_CHOICES, "", "Colour while you are speaking"},
+            {"c_speak", "Speaking", TYPE_STRING, "Yellow", "", LED_COLOR_CHOICES, "", "Colour while Gemini is speaking"},
+        };
+#endif
+
 #if HAL_USE_SDCARD
         SettingGroup_t export_group;
         export_group.name = "Export (SD card)";
@@ -200,6 +218,11 @@ namespace SETTINGS
         _metadata = {wifi_group, sys_group, gemini_group, export_group, import_group};
 #else
         _metadata = {wifi_group, sys_group, gemini_group};
+#endif
+
+#if HAL_USE_LED
+        // after the first three groups, whose positions the app relies on
+        _metadata.insert(_metadata.begin() + 3, led_group);
 #endif
 
 #ifdef CONFIG_BOARD_STICKS3

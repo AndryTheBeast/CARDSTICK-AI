@@ -265,6 +265,10 @@ void GeminiApp::update()
 {
     bool need_update = false;
     EventBits_t bits = xEventGroupGetBits(_control_event_group);
+#if HAL_USE_LED
+    updateLed();
+#endif
+
 
     switch (_currentScreen)
     {
@@ -583,6 +587,82 @@ void GeminiApp::drawBattery(int x, int y, int w, int h, bool with_percent)
         canvas->drawString((std::to_string(_batLevel) + "%").c_str(), x + w + 6, y + 1);
         canvas->setFont(FONT_16);
     }
+}
+#endif
+
+#if HAL_USE_LED
+#define LED_CHECK_INTERVAL_MS 200
+#define LED_BLINK_ON_MS 250
+#define LED_BLINK_OFF_MS 750
+
+// Colours are picked by name in the LED settings; "Off" or an unknown name gives no
+// light. Names and values are the ones Bruce offers for this LED.
+static uint32_t led_color_by_name(const std::string& name)
+{
+    static const struct
+    {
+        const char* name;
+        uint32_t rgb;
+    } colors[] = {{"Purple", 0x960064}, {"White", 0xFFFFFF},      {"Red", 0xFF0000},   {"Orange", 0xFF4500},
+                  {"Yellow", 0xFFFF00}, {"Lime Green", 0x7CFC00}, {"Green", 0x008000}, {"Cyan", 0x00FFFF},
+                  {"Blue", 0x0000FF},   {"Magenta", 0xFF00FF},    {"Pink", 0xFF1493}};
+    for (const auto& color : colors)
+    {
+        if (name == color.name)
+            return color.rgb;
+    }
+    return 0;
+}
+
+// Low battery (blinking) wins over the session state, which wins over the WiFi state.
+// The LED is only touched when what it should show changes.
+void GeminiApp::updateLed()
+{
+    const uint32_t now = millis();
+    if (now < _ledNextCheck)
+        return;
+    _ledNextCheck = now + LED_CHECK_INTERVAL_MS;
+
+    auto* settings = _hal->settings();
+    const char* color_key = nullptr;
+    bool blink = false;
+    if (settings->getBool("led", "enabled"))
+    {
+#if HAL_USE_BAT
+        // the settings screen does not sample the battery itself
+        updateBattery();
+        const int low_level = settings->getNumber("led", "low_bat");
+        if (low_level > 0 && _batLevel >= 0 && _batLevel <= low_level)
+        {
+            color_key = "c_lowbat";
+            blink = true;
+        }
+        else
+#endif
+            if (_appState == APP_STATE_S2S_LISTENING)
+            color_key = "c_listen";
+        else if (_appState == APP_STATE_S2S_SPEAKING)
+            color_key = "c_speak";
+        else
+            color_key = _hal->wifi()->is_connected() ? "c_online" : "c_offline";
+    }
+
+    uint32_t rgb = color_key ? led_color_by_name(settings->getString("led", color_key)) : 0;
+    const uint32_t brightness = settings->getNumber("led", "brightness");
+    const HAL::Color color(((rgb >> 16) & 0xFF) * brightness / 255, ((rgb >> 8) & 0xFF) * brightness / 255, (rgb & 0xFF) * brightness / 255);
+    rgb = (color.r << 16) | (color.g << 8) | color.b;
+
+    const uint32_t wanted = rgb | ((blink && rgb) ? (1UL << 24) : 0);
+    if (wanted == _ledApplied)
+        return;
+    _ledApplied = wanted;
+
+    if (!rgb)
+        _hal->led()->off();
+    else if (blink)
+        _hal->led()->blink_periodic(color, LED_BLINK_ON_MS, LED_BLINK_OFF_MS);
+    else
+        _hal->led()->set_color(color);
 }
 #endif
 
