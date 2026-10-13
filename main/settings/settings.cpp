@@ -75,12 +75,12 @@ namespace SETTINGS
         sys_group.items = {
             back_item,
             // brightness and volumes keep their stored ranges (shared with other M5Apps) and are shown as percentages
-            {"brightness", "Brightness", TYPE_NUMBER, "100", "100", "10", "255", "Screen brightness (0-100%)", nullptr, true},
+            {"brightness", "Brightness", TYPE_NUMBER, "108", "108", "10", "255", "Screen brightness (0-100%)", nullptr, true},
             {"volume",
              "Volume",
              TYPE_NUMBER,
-             "64",
-             "64",
+             "77",
+             "77",
              "0",
              "255",
              "System sound volume (0-100%)",
@@ -123,17 +123,16 @@ namespace SETTINGS
 #else
              "Voice for speech-to-speech mode. Hold [Fn] to enter custom"},
 #endif
-            {"volume", "S2S Volume", TYPE_NUMBER, "255", "255", "0", "255", "Speech volume for S2S mode (0-100%)", nullptr, true},
+            {"volume", "S2S Volume", TYPE_NUMBER, "153", "153", "0", "255", "Speech volume for S2S mode (0-100%)", nullptr, true},
             {"rules",
              "Rules",
              TYPE_STRING,
 #ifdef CONFIG_BOARD_STICKS3
-             "you are conversational AI assistant running on M5 StickS3."
+             "You are conversational AI assistant running on M5 StickS3. "
 #else
-             "you are conversational AI assistant running on M5 CardPuter."
+             "You are conversational AI assistant running on M5 CardPuter. "
 #endif
-             "give short direct and a quite funny answer. start your answer with something "
-             "like: 'yes, master', 'your wish is my command' and so on. reply in user's language",
+             "Give short direct and a quite funny answer. Reply in user's language.",
              "",
              "",
              "500",

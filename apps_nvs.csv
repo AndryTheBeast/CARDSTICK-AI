@@ -1,8 +1,8 @@
 # M5Apps NVS file
 key,type,encoding,value
 system,namespace,,
-brightness,data,i32,100
-volume,data,i32,70
+brightness,data,i32,108
+volume,data,i32,77
 boot_sound,data,u8,1
 wifi,namespace,,
 enabled,data,u8,0
@@ -16,5 +16,4 @@ dns,data,string,"8.8.8.8"
 gemini,namespace,,
 api_key,data,string,""
 model,data,string,"gemini-3.1-flash-live-preview"
-rules,data,string,"you are conversational AI assistant running on M5 CardPuter.give short direct and a quite funny answer. start your answer with something like: 'yes, master', 'your wish is my command' and so on. reply in user's language"
 voice,data,string,"Kore"
