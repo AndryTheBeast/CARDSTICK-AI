@@ -9,6 +9,7 @@
 #include "app/utils/theme/theme_define.h"
 #include "s2s_client.h"
 #include <vector>
+#include <climits>
 #include "assets/g_fonts.hpp"
 #include "assets/gemini_icon.h"
 #include "assets/qr_gemini.h"
@@ -1497,7 +1498,11 @@ void GeminiApp::handleResponseScreenInput()
     }
 }
 
-void GeminiApp::updateScrollPosition() { _scrollPosition = _partialPrompt.empty() ? _lastHistoryIndex : (int)_chat.size(); }
+// While text is coming in the screen follows its last line: the position is set past
+// the end and drawing brings it back to the last full screen. Set to the start of the
+// incoming text, a reply longer than the screen stayed on its first lines while the
+// rest was written out of sight.
+void GeminiApp::updateScrollPosition() { _scrollPosition = _partialPrompt.empty() ? _lastHistoryIndex : INT_MAX / 2; }
 
 void GeminiApp::trimChat()
 {
