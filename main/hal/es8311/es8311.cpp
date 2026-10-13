@@ -4,7 +4,6 @@
  *
  * Pop/click suppression strategy (derived from Linux ALSA driver + ESP-ADF):
  *  - DAC soft-ramp enabled via reg 0x37 bits[7:4] (0.25 dB / 16 LRCK)
- *  - ADC soft-ramp enabled via reg 0x15 bits[7:4]
  *  - SDP data-path muted (regs 0x09, 0x0A bit 6) during power transitions
  *  - VMID reference kept warm on disable (VMIDSEL=2) to avoid cold-start pop
  */
@@ -106,7 +105,11 @@ namespace HAL
             {0x0D, 0x01}, // SYS3: power up analog, VMIDSEL=startup normal speed
             {0x0E, 0x02}, // SYS4: enable analog PGA, enable ADC modulator
             {0x14, 0x10}, // SYS10: select Mic1p-Mic1n, PGA gain minimum
-            {0x15, 0x40}, // ADC1: soft-ramp rate=4 (0.25dB/16LRCK)
+            // ADC1: no soft ramp. After power-on the volume climbs from silence at the
+            // ramp's rate, which took six seconds: the first words of the first chat
+            // after a restart were not heard. The muted data path above covers the
+            // start instead.
+            {0x15, 0x00},
             {0x17, 0xBF}, // ADC3: volume 0 dB
             {0x1C, 0x6A}, // ADC8: EQ bypass, HPF on, cancel DC offset
         };
@@ -127,7 +130,7 @@ namespace HAL
     void ES8311::mic_disable()
     {
         static const uint8_t regs[][2] = {
-            {0x17, 0x00}, // ADC3: volume mute (soft-ramped)
+            {0x17, 0x00}, // ADC3: volume mute
             {0x0A, 0x40}, // SDP_OUT: mute ADC output
             {0x0E, 0x6A}, // SYS4: power down PGA + ADC modulator
             {0x0D, 0xFA}, // SYS3: power down analog blocks, keep Vref + VMIDSEL=2 warm
