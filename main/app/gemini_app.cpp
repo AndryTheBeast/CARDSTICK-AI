@@ -28,7 +28,7 @@ static const char* GEMINI_NS = "gemini";
 static const char* HINT_MAIN = "[A] START [B hold] SETTINGS";
 static const char* API_KEY_HINT = "[A] [B hold]";
 #else
-static const char* HINT_MAIN = "[ENTER] START [ESC] SETTINGS";
+static const char* HINT_MAIN = "[\u2190][\u2192] [ENTER] START [ESC] SETTINGS";
 static const char* API_KEY_HINT = "[ENTER] [ESC]";
 #endif
 
@@ -538,6 +538,92 @@ void GeminiApp::update()
 // Main screen
 // ═══════════════════════════════════════════════════════════
 
+#if S2S_TEXT_INPUT
+static uint32_t icon_color(uint32_t rgb, uint8_t level);
+
+// Start screen cards: "Live" talks, "Text" types. Drawn rather than stored as bitmaps,
+// so that the unselected one can be dimmed and neither costs flash.
+#define CARD_W 102
+#define CARD_H 66
+#define CARD_Y 52
+#define CARD_GAP 12
+
+// microphone with sound waves on both sides, centred on cx, 32 px tall from y
+static void draw_live_icon(LGFX_Sprite* c, int cx, int y, uint32_t color)
+{
+    c->fillRoundRect(cx - 6, y, 13, 20, 6, color);
+    c->fillArc(cx, y + 12, 11, 10, 0, 180, color);
+    c->fillRect(cx - 1, y + 22, 3, 6, color);
+    c->fillRoundRect(cx - 7, y + 28, 15, 3, 1, color);
+    for (int r = 18; r <= 25; r += 7)
+    {
+        c->fillArc(cx, y + 11, r + 1, r, 325, 360, color);
+        c->fillArc(cx, y + 11, r + 1, r, 0, 35, color);
+        c->fillArc(cx, y + 11, r + 1, r, 145, 215, color);
+    }
+}
+
+// keyboard, centred on cx, in the same 32 px of height
+static void draw_text_icon(LGFX_Sprite* c, int cx, int y, uint32_t color)
+{
+    c->drawRoundRect(cx - 24, y + 3, 49, 27, 4, color);
+    c->drawRoundRect(cx - 23, y + 4, 47, 25, 3, color);
+    for (int i = 0; i < 6; i++)
+        c->fillRect(cx - 18 + i * 6 + (i > 2 ? 1 : 0), y + 8, 4, 4, color);
+    for (int i = 0; i < 5; i++)
+        c->fillRect(cx - 15 + i * 6 + (i > 2 ? 1 : 0), y + 14, 4, 4, color);
+    c->fillRect(cx - 18, y + 20, 4, 4, color);
+    c->fillRect(cx - 11, y + 20, 23, 4, color);
+    c->fillRect(cx + 15, y + 20, 4, 4, color);
+}
+
+static void draw_mode_card(LGFX_Sprite* c, int x, const char* label, bool text_icon, bool selected)
+{
+    const uint32_t border = selected ? THEME_COLOR_TITLE : (uint32_t)0x3A3A3A;
+    const uint32_t fill = selected ? (uint32_t)0x10283C : (uint32_t)0x000000;
+    const uint32_t icon = icon_color(text_icon ? 0xFFC000 : 0xFF5A5A, selected ? 255 : 105);
+    c->fillRoundRect(x, CARD_Y, CARD_W, CARD_H, 8, fill);
+    c->drawRoundRect(x, CARD_Y, CARD_W, CARD_H, 8, border);
+    if (selected)
+        c->drawRoundRect(x + 1, CARD_Y + 1, CARD_W - 2, CARD_H - 2, 7, border);
+    if (text_icon)
+        draw_text_icon(c, x + CARD_W / 2, CARD_Y + 7, icon);
+    else
+        draw_live_icon(c, x + CARD_W / 2, CARD_Y + 7, icon);
+    c->setFont(FONT_16);
+    c->setTextColor(selected ? TFT_WHITE : TFT_DARKGREY);
+    c->drawCenterString(label, x + CARD_W / 2, CARD_Y + CARD_H - 21);
+}
+
+bool GeminiApp::drawMainScreen()
+{
+    if (is_rendered)
+        return false;
+
+    _chat.clear();
+    _partialPrompt = "";
+
+    auto* canvas = _hal->canvas();
+    canvas->fillScreen(THEME_COLOR_BG);
+    canvas->setFont(FONT_16);
+    canvas->setTextColor(THEME_COLOR_TITLE);
+    canvas->drawCenterString("Gemini AI", canvas->width() / 2, TEXT_PADDING);
+    canvas->setFont(FONT_12);
+    canvas->setTextColor(TFT_DARKGREY);
+    canvas->drawCenterString("v" BUILD_NUMBER, canvas->width() / 2, TEXT_PADDING + 20);
+
+    const int left = (canvas->width() - CARD_W * 2 - CARD_GAP) / 2;
+    draw_mode_card(canvas, left, "Live", false, !_startInText);
+    draw_mode_card(canvas, left + CARD_W + CARD_GAP, "Text", true, _startInText);
+
+#if HAL_USE_BAT
+    drawBattery(4, 5, 22, 11, true);
+#endif
+
+    is_rendered = true;
+    return true;
+}
+#else
 bool GeminiApp::drawMainScreen()
 {
     if (is_rendered)
@@ -571,6 +657,7 @@ bool GeminiApp::drawMainScreen()
     is_rendered = true;
     return true;
 }
+#endif
 
 #if HAL_USE_BAT
 #define BATTERY_CHECK_INTERVAL_MS 5000
@@ -741,8 +828,29 @@ void GeminiApp::handleMainScreenInput()
         }
 
         _currentScreen = SCREEN_CHAT;
+#if S2S_TEXT_INPUT
+        _textMode = _startInText;
+#endif
         startS2S();
     }
+#if S2S_TEXT_INPUT
+    else if (_hal->keyboard()->isKeyPressing(KEY_NUM_LEFT) || _hal->keyboard()->isKeyPressing(KEY_NUM_RIGHT) ||
+             _hal->keyboard()->isKeyPressing(KEY_NUM_TAB))
+    {
+        // two cards: any of these keys moves to the other one
+        const uint8_t key = _hal->keyboard()->isKeyPressing(KEY_NUM_LEFT)    ? KEY_NUM_LEFT
+                            : _hal->keyboard()->isKeyPressing(KEY_NUM_RIGHT) ? KEY_NUM_RIGHT
+                                                                             : KEY_NUM_TAB;
+        const bool want_text = key == KEY_NUM_TAB ? !_startInText : key == KEY_NUM_RIGHT;
+        _hal->keyboard()->waitForRelease(key);
+        if (want_text != _startInText)
+        {
+            _startInText = want_text;
+            _hal->playNextSound();
+            is_rendered = false;
+        }
+    }
+#endif
     else if (_hal->keyboard()->isKeyPressing(KEY_NUM_ESC))
     {
         _hal->keyboard()->waitForRelease(KEY_NUM_ESC);

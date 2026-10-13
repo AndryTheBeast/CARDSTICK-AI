@@ -84,6 +84,8 @@ private:
 #if S2S_TEXT_INPUT
     // Typed chat: the microphone is off, replies are shown and not played
     bool _textMode = false;
+    // Mode picked on the start screen: false for a live (voice) session, true for text
+    bool _startInText = false;
     void setTextMode(bool enabled);
     void typeMessage();
 #endif
