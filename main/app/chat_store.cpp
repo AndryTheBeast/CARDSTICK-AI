@@ -167,7 +167,7 @@ namespace CHAT_STORE
             unmount(hal);
             return false;
         }
-        ESP_LOGI(TAG, "Card mounted, heap=%d", (int)esp_get_free_heap_size());
+        ESP_LOGD(TAG, "Card mounted, heap=%d", (int)esp_get_free_heap_size());
         return true;
     }
 

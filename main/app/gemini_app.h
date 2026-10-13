@@ -91,9 +91,9 @@ private:
     void typeMessage();
 #endif
 #if S2S_CHAT_MEMORY
-    // The conversation as turns, for the SD card and for a session that has to be told
-    // what was said before. _chat holds the same text broken into screen lines.
-    std::vector<CHAT_STORE::Turn> _turns;
+    // The conversation so far is ready in _s2s_shared for the session about to start.
+    // If not, a session that starts reads it from the card: it is not kept in memory.
+    bool _historyReady = false;
     // Chat being written to the SD card: 0 until its first turn
     int _chatId = 0;
     bool _chatSaving = false;

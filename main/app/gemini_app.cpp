@@ -142,11 +142,27 @@ void GeminiApp::startS2S()
         _s2s_shared.input_transcript.clear();
         _s2s_shared.output_transcript.clear();
         _s2s_shared.error_message.clear();
-#if S2S_CHAT_MEMORY
-        _s2s_shared.history = CHAT_STORE::history_message(_turns);
-#endif
         xSemaphoreGive(_s2s_shared.mutex);
     }
+#if S2S_CHAT_MEMORY
+    // A session that reconnects is told what was said so far, in case its handle is
+    // refused. That is read back from the card: the session is stopped at this point,
+    // so there is memory to mount it.
+    if (!_historyReady && _chatSaving && _chatId != 0 && CHAT_STORE::mount(_hal))
+    {
+        std::vector<CHAT_STORE::Turn> turns;
+        std::string handle;
+        CHAT_STORE::load(_chatId, turns, handle);
+        CHAT_STORE::unmount(_hal);
+        std::string history = CHAT_STORE::history_message(turns);
+        if (xSemaphoreTake(_s2s_shared.mutex, pdMS_TO_TICKS(200)) == pdTRUE)
+        {
+            _s2s_shared.history.swap(history);
+            xSemaphoreGive(_s2s_shared.mutex);
+        }
+    }
+    _historyReady = false;
+#endif
 
     if (s2s_start(_hal, _control_event_group, &_s2s_shared, api_key, model, voice, rules, volume))
     {
@@ -265,7 +281,7 @@ static const char* CHAT_NS = "chat";
 bool GeminiApp::chooseChat()
 {
     std::string handle;
-    _turns.clear();
+    std::vector<CHAT_STORE::Turn> turns;
     _unsavedTurns.clear();
     _chatId = 0;
     _chatSaving = false;
@@ -279,22 +295,25 @@ bool GeminiApp::chooseChat()
             CHAT_STORE::unmount(_hal);
             return false;
         }
-        if (id > 0 && CHAT_STORE::load(id, _turns, handle))
+        if (id > 0 && CHAT_STORE::load(id, turns, handle))
             _chatId = id;
-        // the card stays mounted for as long as the chat is open
+        // a session needs the memory: the card is mounted again for each write
+        CHAT_STORE::unmount(_hal);
         _chatSaving = true;
     }
 
-    // a new chat must not pick up the session of the one before it
+    // a new chat must not pick up the session of the one before it, nor its text
     if (xSemaphoreTake(_s2s_shared.mutex, pdMS_TO_TICKS(200)) == pdTRUE)
     {
         _s2s_shared.session_handle = handle;
+        _s2s_shared.history = CHAT_STORE::history_message(turns);
         xSemaphoreGive(_s2s_shared.mutex);
     }
     _savedHandle = handle;
+    _historyReady = true;
 
     _chat.clear();
-    for (const auto& turn : _turns)
+    for (const auto& turn : turns)
     {
         for (const auto& line : splitTextIntoLines(turn.text))
             _chat.push_back({turn.user ? HISTORY_ITEM_TYPE_USER : HISTORY_ITEM_TYPE_MODEL, line});
@@ -310,19 +329,23 @@ bool GeminiApp::chooseChat()
 
 void GeminiApp::rememberTurn(bool user, const std::string& text)
 {
-    const CHAT_STORE::Turn turn = {user, text};
-    _turns.push_back(turn);
-    CHAT_STORE::trim(_turns);
     if (_chatSaving)
-        _unsavedTurns.push_back(turn);
+        _unsavedTurns.push_back({user, text});
 }
 
 // Writes what the card does not have yet: the new turns, and the handle that resumes
 // the session, which changes as the conversation goes on. Looked at once a second from
-// the chat screen, and `now` when the chat is left.
+// the chat screen, and `now` when the session has stopped.
+//
+// Not while the microphone is streaming. A voice session then holds a TLS record going
+// out and one coming in at once and has nothing to spare: the 3 KB of a mounted card
+// made it lose the connection. What a voice chat has to write waits until Gemini
+// answers, when nothing is being sent.
 void GeminiApp::saveChat(bool now)
 {
     if (!_chatSaving)
+        return;
+    if (!now && _appState == APP_STATE_S2S_LISTENING && !_textMode)
         return;
     const uint32_t ms = millis();
     if (!now && ms < _saveNextCheck)
@@ -338,21 +361,26 @@ void GeminiApp::saveChat(bool now)
     if (_unsavedTurns.empty() && (handle == _savedHandle || _chatId == 0))
         return;
 
-    if (_chatId == 0)
-        _chatId = CHAT_STORE::create();
-    bool saved = _chatId != 0;
-    size_t written = 0;
-    while (saved && written < _unsavedTurns.size())
+    bool saved = CHAT_STORE::mount(_hal);
+    if (saved)
     {
-        saved = CHAT_STORE::append(_chatId, _unsavedTurns[written]);
-        if (saved)
-            written++;
-    }
-    _unsavedTurns.erase(_unsavedTurns.begin(), _unsavedTurns.begin() + written);
-    if (saved && handle != _savedHandle)
-    {
-        CHAT_STORE::save_handle(_chatId, handle);
-        _savedHandle = handle;
+        if (_chatId == 0)
+            _chatId = CHAT_STORE::create();
+        saved = _chatId != 0;
+        size_t written = 0;
+        while (saved && written < _unsavedTurns.size())
+        {
+            saved = CHAT_STORE::append(_chatId, _unsavedTurns[written]);
+            if (saved)
+                written++;
+        }
+        _unsavedTurns.erase(_unsavedTurns.begin(), _unsavedTurns.begin() + written);
+        if (saved && handle != _savedHandle)
+        {
+            CHAT_STORE::save_handle(_chatId, handle);
+            _savedHandle = handle;
+        }
+        CHAT_STORE::unmount(_hal);
     }
 
     if (saved)
@@ -365,15 +393,13 @@ void GeminiApp::saveChat(bool now)
         ESP_LOGW(TAG, "Chat is no longer saved");
         _chatSaving = false;
         _unsavedTurns.clear();
-        CHAT_STORE::unmount(_hal);
     }
 }
 
-// Back to the start screen: the last of the chat goes to the card, which is let go
+// Back to the start screen: the last of the chat goes to the card
 void GeminiApp::closeChat()
 {
     saveChat(true);
-    CHAT_STORE::unmount(_hal);
     _chatSaving = false;
 }
 #endif
@@ -1473,9 +1499,17 @@ void GeminiApp::updateScrollPosition() { _scrollPosition = _partialPrompt.empty(
 
 void GeminiApp::trimChat()
 {
-    if ((int)_chat.size() > MAX_CHAT_LINES)
+#if S2S_CHAT_MEMORY
+    // Every line kept costs a session memory it has little of: free heap fell by about
+    // half a KB with each exchange of a voice chat. The whole chat is on the card, to
+    // be read in the viewer.
+    const int max_lines = 100;
+#else
+    const int max_lines = MAX_CHAT_LINES;
+#endif
+    if ((int)_chat.size() > max_lines)
     {
-        int excess = _chat.size() - MAX_CHAT_LINES;
+        int excess = _chat.size() - max_lines;
         _chat.erase(_chat.begin(), _chat.begin() + excess);
         _lastHistoryIndex = std::max(0, _lastHistoryIndex - excess);
         _scrollPosition = std::max(0, _scrollPosition - excess);
