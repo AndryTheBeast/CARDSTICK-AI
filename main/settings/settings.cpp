@@ -350,8 +350,15 @@ namespace SETTINGS
     {
         for (const auto& group : _metadata)
         {
+            // entries that only run an action have nothing stored
+            if (group.nvs_namespace.empty())
+                continue;
+
             nvs_handle_t nvs_handle;
             esp_err_t err = nvs_open_from_partition(_active_partition, group.nvs_namespace.c_str(), NVS_READONLY, &nvs_handle);
+            // a namespace does not exist until one of its settings is saved: the defaults apply
+            if (err == ESP_ERR_NVS_NOT_FOUND)
+                continue;
             if (err != ESP_OK)
             {
                 ESP_LOGE(TAG, "Error opening NVS namespace %s", group.nvs_namespace.c_str());
