@@ -10,7 +10,6 @@
 #include <cmath>
 #include <cstring>
 #include "esp_rom_crc.h"
-#include <format>
 
 static const char* TAG = "S2S";
 
@@ -944,7 +943,7 @@ bool s2s_start(HAL::Hal* hal,
 
     // Build WebSocket URL with API key
     {
-        std::string url = std::format("{}?key={}", S2S_WS_BASE_URL, api_key);
+        std::string url = std::string(S2S_WS_BASE_URL) + "?key=" + api_key;
 
         esp_websocket_client_config_t ws_cfg = {};
         ws_cfg.uri = url.c_str();

@@ -10,7 +10,6 @@
  */
 #pragma once
 #include <functional>
-#include <iostream>
 #include <memory>
 #include <vector>
 #include "board.h"

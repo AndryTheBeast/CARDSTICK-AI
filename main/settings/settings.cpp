@@ -10,8 +10,7 @@
 #include "app/utils/web/web_setup.h"
 #endif
 #include "common_define.h"
-#include <format>
-#include <fstream>
+#include <cstdio>
 #include <string>
 #include <vector>
 #include <map>
@@ -21,6 +20,20 @@ static const std::string SETTINGS_FILE_NAME = "/sdcard/settings.txt";
 static const char* WIFI_NETWORKS_KEY = "nets";
 static const char WIFI_FIELD_SEP = '\x1f';
 static const char WIFI_RECORD_SEP = '\x1e';
+
+// stdio rather than <fstream>: the stream classes pull the whole locale machinery into the image
+static bool read_line(FILE* file, std::string& line)
+{
+    line.clear();
+    int c;
+    while ((c = fgetc(file)) != EOF)
+    {
+        if (c == '\n')
+            return true;
+        line += (char)c;
+    }
+    return !line.empty();
+}
 
 namespace SETTINGS
 {
@@ -283,7 +296,7 @@ namespace SETTINGS
 
     std::string Settings::_makeKey(const std::string& ns, const std::string& key) const
     {
-        return std::format("{}-{}", ns, key);
+        return ns + "-" + key;
     }
 
     const SettingItem_t* Settings::_findItem(const std::string& ns, const std::string& key) const
@@ -633,11 +646,11 @@ namespace SETTINGS
 
         std::map<std::string, std::string> existing_settings;
 
-        std::ifstream infile(filename);
-        if (infile.is_open())
+        FILE* infile = fopen(filename.c_str(), "r");
+        if (infile)
         {
             std::string line;
-            while (std::getline(infile, line))
+            while (read_line(infile, line))
             {
                 line.erase(0, line.find_first_not_of(" \t\n\r"));
                 line.erase(line.find_last_not_of(" \t\n\r") + 1);
@@ -665,7 +678,7 @@ namespace SETTINGS
                 }
                 existing_settings[cache_key] = value_str;
             }
-            infile.close();
+            fclose(infile);
             ESP_LOGI(TAG, "Read file %s. Found %d settings", filename.c_str(), existing_settings.size());
         }
         else
@@ -721,17 +734,17 @@ namespace SETTINGS
             }
         }
 
-        std::ofstream outfile(filename);
-        if (!outfile.is_open())
+        FILE* outfile = fopen(filename.c_str(), "w");
+        if (!outfile)
         {
             ESP_LOGE(TAG, "Failed to open file %s for writing", filename.c_str());
             return false;
         }
         for (const auto& [key, value] : existing_settings)
         {
-            outfile << key << "=" << value << std::endl;
+            fprintf(outfile, "%s=%s\n", key.c_str(), value.c_str());
         }
-        outfile.close();
+        fclose(outfile);
         ESP_LOGI(TAG, "Settings successfully exported to %s", filename.c_str());
         return true;
     }
@@ -739,8 +752,8 @@ namespace SETTINGS
     bool Settings::importFromFile(const std::string& filename)
     {
         ESP_LOGI(TAG, "Importing settings from %s", filename.c_str());
-        std::ifstream infile(filename);
-        if (!infile.is_open())
+        FILE* infile = fopen(filename.c_str(), "r");
+        if (!infile)
         {
             ESP_LOGE(TAG, "Failed to open file %s for reading", filename.c_str());
             return false;
@@ -750,7 +763,7 @@ namespace SETTINGS
         bool success = false;
         int line_num = 0;
 
-        while (std::getline(infile, line))
+        while (read_line(infile, line))
         {
             line_num++;
             line.erase(0, line.find_first_not_of(" \t\n\r"));
@@ -851,7 +864,7 @@ namespace SETTINGS
             }
         }
 
-        infile.close();
+        fclose(infile);
 
         if (success)
         {

@@ -179,7 +179,7 @@ namespace UTILS
                     need_update |= SCROLL_TEXT::scroll_text_render(
                         &message_scroll_ctx,
                         close_timeout_ms > 0
-                            ? std::format("{} {} sec", message, (uint32_t)((close_timeout_ms - (now - start_time)) / 1000))
+                            ? (message + " " + std::to_string((uint32_t)((close_timeout_ms - (now - start_time)) / 1000)) + " sec")
                                   .c_str()
                             : message.c_str(),
                         dialog_x + 10,
@@ -191,7 +191,7 @@ namespace UTILS
                 {
                     hal->canvas()->setTextColor(message_color);
                     hal->canvas()->drawCenterString(
-                        std::format("{} {} sec", message, (uint32_t)((close_timeout_ms - (now - start_time)) / 1000)).c_str(),
+                        (message + " " + std::to_string((uint32_t)((close_timeout_ms - (now - start_time)) / 1000)) + " sec").c_str(),
                         dialog_x + DIALOG_WIDTH / 2,
                         dialog_y + 10 + VERTICAL_SPACING);
                     need_update = true;
@@ -421,7 +421,7 @@ namespace UTILS
                 // Draw percentage text centered in progress bar
                 hal->canvas()->setTextColor(fill_width > bar_w / 2 ? TFT_BLACK : TFT_WHITE);
                 hal->canvas()->setFont(FONT_16);
-                hal->canvas()->drawCenterString(std::format("{}%", progress).c_str(), bar_x + bar_w / 2, bar_y + 1);
+                hal->canvas()->drawCenterString((std::to_string(progress) + "%").c_str(), bar_x + bar_w / 2, bar_y + 1);
             }
             else
             {
@@ -550,7 +550,7 @@ namespace UTILS
                 // Draw min/max hint
                 hal->canvas()->setFont(FONT_10);
                 hal->canvas()->setTextColor(TFT_DARKGREY);
-                hal->canvas()->drawString(std::format("Range: {} to {}", min_value, max_value).c_str(),
+                hal->canvas()->drawString(("Range: " + std::to_string(min_value) + " to " + std::to_string(max_value)).c_str(),
                                           box_x,
                                           box_y + box_h + 5);
                 // Handle input
@@ -666,7 +666,7 @@ namespace UTILS
                             {
                                 show_error_dialog(hal,
                                                   "Invalid value",
-                                                  std::format("Enter value between {} and {}", min_value, max_value).c_str());
+                                                  "Enter value between " + std::to_string(min_value) + " and " + std::to_string(max_value));
                                 input = std::to_string(value); // Reset to original value
                                 cursor_pos = input.length();
                             }
@@ -820,7 +820,7 @@ namespace UTILS
                 hal->canvas()->drawString(mode_label, box_x, box_y + box_h + 5);
                 // draw number of symbols
                 hal->canvas()->setTextColor(TFT_DARKGREY);
-                hal->canvas()->drawRightString(std::format("{} / {}", input.size(), max_length).c_str(),
+                hal->canvas()->drawRightString((std::to_string(input.size()) + " / " + std::to_string(max_length)).c_str(),
                                                box_x + box_w - 2,
                                                box_y + box_h + 5);
                 // draw keyboard fo non-latin layout

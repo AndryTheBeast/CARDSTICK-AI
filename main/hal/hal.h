@@ -15,7 +15,6 @@
 #include "LovyanGFX.h"
 #endif
 #include "settings/settings.h"
-#include <iostream>
 #include <string>
 
 #if HAL_USE_I2C

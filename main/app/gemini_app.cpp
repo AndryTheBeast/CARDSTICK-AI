@@ -580,7 +580,7 @@ void GeminiApp::drawBattery(int x, int y, int w, int h, bool with_percent)
     {
         canvas->setFont(FONT_10);
         canvas->setTextColor(TFT_LIGHTGREY);
-        canvas->drawString(std::format("{}%", _batLevel).c_str(), x + w + 6, y + 1);
+        canvas->drawString((std::to_string(_batLevel) + "%").c_str(), x + w + 6, y + 1);
         canvas->setFont(FONT_16);
     }
 }

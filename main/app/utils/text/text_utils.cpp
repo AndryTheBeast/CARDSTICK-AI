@@ -5,7 +5,6 @@
 
 #include "text_utils.h"
 #include <algorithm>
-#include <format>
 #include <time.h>
 #include <cstdio>
 #include "lgfx/v1/LGFXBase.hpp"
@@ -218,7 +217,9 @@ namespace UTILS
             struct tm now_tm;
             localtime_r(&now, &now_tm);
 
-            std::string time_str = std::format("{:02d}:{:02d}", ti.tm_hour, ti.tm_min);
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%02d:%02d", ti.tm_hour, ti.tm_min);
+            std::string time_str = buf;
 
             if (ti.tm_year == now_tm.tm_year && ti.tm_yday == now_tm.tm_yday)
                 return time_str;
@@ -227,14 +228,17 @@ namespace UTILS
             if (days_ago > 0 && days_ago < 7)
             {
                 static constexpr const char* days[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-                return std::format("{} {}", days[ti.tm_wday], time_str);
+                return std::string(days[ti.tm_wday]) + " " + time_str;
             }
 
             if (ti.tm_year == now_tm.tm_year)
-                return std::format("{:02d}.{:02d} {}", ti.tm_mday, ti.tm_mon + 1, time_str);
+            {
+                snprintf(buf, sizeof(buf), "%02d.%02d ", ti.tm_mday, ti.tm_mon + 1);
+                return buf + time_str;
+            }
 
-            return std::format("{:02d}.{:02d}.{:04d} {}",
-                ti.tm_mday, ti.tm_mon + 1, ti.tm_year + 1900, time_str);
+            snprintf(buf, sizeof(buf), "%02d.%02d.%04d ", ti.tm_mday, ti.tm_mon + 1, ti.tm_year + 1900);
+            return buf + time_str;
         }
 
     } // namespace TEXT

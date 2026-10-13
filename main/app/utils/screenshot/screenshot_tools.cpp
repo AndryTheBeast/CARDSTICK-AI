@@ -13,7 +13,6 @@
 #include "common_define.h"
 #include "app/utils/theme/theme_define.h"
 #include "esp_log.h"
-#include <format>
 #include <sys/stat.h>
 #include <errno.h>
 #include <cstring>
@@ -75,7 +74,9 @@ namespace UTILS
 
             // Generate filename with timestamp
             uint32_t timestamp = millis();
-            std::string filename = std::format("/sdcard/m5apps/screenshots/plai_{:08x}.bmp", timestamp);
+            char filename_buf[48];
+            snprintf(filename_buf, sizeof(filename_buf), "/sdcard/m5apps/screenshots/plai_%08lx.bmp", (unsigned long)timestamp);
+            std::string filename = filename_buf;
 
             // Calculate row size (must be multiple of 4 bytes)
             uint32_t row_size = ((width * 3 + 3) / 4) * 4;

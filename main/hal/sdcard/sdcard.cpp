@@ -9,7 +9,6 @@
  *
  */
 #include <string.h>
-#include <format>
 #include <sys/unistd.h>
 #include <sys/stat.h>
 #include "esp_log.h"
@@ -138,7 +137,9 @@ std::string SDCard::get_manufacturer()
     {
         return "";
     }
-    return std::format("0x{:02x}", card->cid.mfg_id);
+    char buf[8];
+    snprintf(buf, sizeof(buf), "0x%02x", (unsigned)card->cid.mfg_id);
+    return buf;
 }
 
 std::string SDCard::get_device_name()
