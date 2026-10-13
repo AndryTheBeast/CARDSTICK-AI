@@ -704,18 +704,27 @@ static void s2s_client_task(void* parameter)
                 mic_warmed = true;
             }
 
-            // Accumulate into send buffer
+            // Accumulate into the send buffer. A frame does not divide evenly into a
+            // chunk: what is left over after a send starts the next chunk. Dropping it
+            // cut 12 ms out of every 100 ms of speech.
+            const uint8_t* src = (const uint8_t*)frame;
             size_t frame_bytes = MIC_BUF_SAMPLES * sizeof(int16_t);
-            if (pcm_pos + frame_bytes > PCM_SEND_BYTES)
-                frame_bytes = PCM_SEND_BYTES - pcm_pos;
-            memcpy(s_pcm_buf + pcm_pos, frame, frame_bytes);
-            pcm_pos += frame_bytes;
-
-            // Send when buffer full
-            if (pcm_pos >= PCM_SEND_BYTES)
+            while (frame_bytes > 0)
             {
-                s2s_send_audio(ctx, s_pcm_buf, pcm_pos);
-                pcm_pos = 0;
+                size_t part = PCM_SEND_BYTES - pcm_pos;
+                if (part > frame_bytes)
+                    part = frame_bytes;
+                memcpy(s_pcm_buf + pcm_pos, src, part);
+                pcm_pos += part;
+                src += part;
+                frame_bytes -= part;
+
+                // Send when buffer full
+                if (pcm_pos >= PCM_SEND_BYTES)
+                {
+                    s2s_send_audio(ctx, s_pcm_buf, pcm_pos);
+                    pcm_pos = 0;
+                }
             }
         }
 
