@@ -6,9 +6,7 @@
 #include "settings.h"
 #include "hal/hal.h"
 #include "app/utils/ui/dialog.h"
-#ifdef CONFIG_BOARD_STICKS3
 #include "app/utils/web/web_setup.h"
-#endif
 #include "common_define.h"
 #include <cstdio>
 #include <string>
@@ -225,8 +223,8 @@ namespace SETTINGS
         _metadata.insert(_metadata.begin() + 3, led_group);
 #endif
 
-#ifdef CONFIG_BOARD_STICKS3
-        // No keyboard: text settings are edited from a phone or PC browser
+        // Text settings edited from a phone or PC browser: the only way without a keyboard,
+        // and easier than the on-device editor for the API key and the rules
         SettingGroup_t web_group;
         web_group.name = "Web setup";
         web_group.items = {};
@@ -236,7 +234,6 @@ namespace SETTINGS
                 UTILS::WEB_SETUP::run(_hal);
         };
         _metadata.push_back(web_group);
-#endif
 
         SettingGroup_t power_group;
         power_group.items = {};

@@ -1,6 +1,6 @@
 /**
  * @file web_setup.h
- * @brief Browser based settings editor for boards without a keyboard
+ * @brief Browser based settings editor
  */
 #pragma once
 

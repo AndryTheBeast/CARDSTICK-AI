@@ -1,10 +1,11 @@
 /**
  * @file web_setup.cpp
- * @brief Browser based settings editor for boards without a keyboard
+ * @brief Browser based settings editor: the only way to enter text on boards without a
+ *        keyboard, and a more comfortable one for long values on the others
  */
 #include "web_setup.h"
 #include "hal_config.h"
-#if defined(CONFIG_BOARD_STICKS3) && HAL_USE_WIFI && HAL_USE_KEYBOARD && HAL_USE_DISPLAY
+#if HAL_USE_WIFI && HAL_USE_KEYBOARD && HAL_USE_DISPLAY
 #include "../ui/dialog.h"
 #include "../theme/theme_define.h"
 #include "common_define.h"
@@ -456,7 +457,11 @@ namespace
         ESP_LOGI(TAG, "Settings saved from browser");
 
         std::string page = PAGE_HEAD;
+#ifdef CONFIG_BOARD_STICKS3
         page += "<div class=box><h1>Saved</h1><p>Hold button B on the device to leave setup. "
+#else
+        page += "<div class=box><h1>Saved</h1><p>Press DEL on the device to leave setup. "
+#endif
                 "It then reconnects with the new settings.</p><p><a href=/ style='color:#2d97dd'>Back to settings</a></p>"
                 "</div></body></html>";
         httpd_resp_set_type(req, "text/html");
@@ -565,7 +570,11 @@ namespace
 
         canvas->setFont(FONT_10);
         canvas->setTextColor(TFT_DARKGREY);
+#ifdef CONFIG_BOARD_STICKS3
         canvas->drawString(screen.use_ap ? "[A] switch QR code   [hold B] done" : "[hold B] done",
+#else
+        canvas->drawString(screen.use_ap ? "[ENTER] switch QR code   [DEL] done" : "[DEL] done",
+#endif
                            2,
                            canvas->height() - 11);
         hal->canvas_update();
@@ -645,6 +654,14 @@ namespace UTILS
                         need_draw = true;
                     }
                 }
+#ifndef CONFIG_BOARD_STICKS3
+                else if (hal->keyboard()->isKeyPressing(KEY_NUM_BACKSPACE))
+                {
+                    // released before returning, or the settings screen takes it as "back" too
+                    hal->keyboard()->waitForRelease(KEY_NUM_BACKSPACE);
+                    break;
+                }
+#endif
                 else if (hal->keyboard()->isKeyPressing(KEY_NUM_ESC) || hal->keyboard()->isKeyPressing(KEY_NUM_BACKSPACE))
                 {
                     hal->keyboard()->waitForRelease(KEY_NUM_ESC);
