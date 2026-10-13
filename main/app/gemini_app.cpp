@@ -141,6 +141,10 @@ void GeminiApp::startS2S()
     if (s2s_start(_hal, _control_event_group, &_s2s_shared, api_key, model, voice, rules, volume))
     {
         _s2s_active = true;
+#if S2S_TEXT_INPUT
+        // a session restarted after an error stays in the mode the user chose
+        setTextMode(_textMode);
+#endif
         setState(APP_STATE_S2S_CONNECTING);
     }
     else
@@ -157,6 +161,45 @@ void GeminiApp::stopS2S()
     s2s_stop();
     _s2s_active = false;
 }
+
+#if S2S_TEXT_INPUT
+void GeminiApp::setTextMode(bool enabled)
+{
+    _textMode = enabled;
+    if (enabled)
+        xEventGroupSetBits(_control_event_group, S2S_TEXT_MODE_BIT);
+    else
+        xEventGroupClearBits(_control_event_group, S2S_TEXT_MODE_BIT);
+}
+
+// Ask for a message and send it as the user's turn. There is no transcription coming
+// back for typed text, so it is put into the chat here.
+void GeminiApp::typeMessage()
+{
+    std::string text;
+    const bool entered = UTILS::UI::show_edit_string_dialog(_hal, "Message", text, false, 200);
+    is_rendered = false;
+
+    const size_t first = text.find_first_not_of(' ');
+    if (!entered || first == std::string::npos)
+        return;
+    text = text.substr(first, text.find_last_not_of(' ') - first + 1);
+
+    if (xSemaphoreTake(_s2s_shared.mutex, pdMS_TO_TICKS(200)) != pdTRUE)
+        return;
+    _s2s_shared.pending_text = text;
+    xSemaphoreGive(_s2s_shared.mutex);
+    xEventGroupSetBits(_control_event_group, S2S_SEND_TEXT_BIT);
+
+    _userPrompt = text;
+    _lastHistoryIndex = _chat.size();
+    for (const auto& line : splitTextIntoLines(text))
+        _chat.push_back({HISTORY_ITEM_TYPE_USER, line});
+    trimChat();
+    _partialPrompt = "";
+    updateScrollPosition();
+}
+#endif
 
 // ═══════════════════════════════════════════════════════════
 // Init
@@ -246,6 +289,9 @@ const char* GeminiApp::getHintForState() const
     switch (_appState)
     {
     case APP_STATE_S2S_LISTENING:
+#if S2S_TEXT_INPUT
+        return _textMode ? "[ENTER] TYPE [TAB] VOICE [ESC] STOP" : "[ENTER] SEND [TAB] TYPE [ESC] STOP";
+#endif
         return "[ENTER] SEND [\u2191][\u2193] SCROLL [ESC] STOP";
     case APP_STATE_S2S_SPEAKING:
         return "[ENTER] SKIP [\u2191][\u2193] SCROLL [ESC] STOP";
@@ -639,6 +685,12 @@ void GeminiApp::updateLed()
         }
         else
 #endif
+#if S2S_TEXT_INPUT
+            // the microphone is off while typing
+            if (_appState == APP_STATE_S2S_LISTENING && _textMode)
+            color_key = "c_online";
+        else
+#endif
             if (_appState == APP_STATE_S2S_LISTENING)
             color_key = "c_listen";
         else if (_appState == APP_STATE_S2S_SPEAKING)
@@ -808,6 +860,12 @@ bool GeminiApp::drawResponseScreen()
             status_text = "listening...";
         else if (_appState == APP_STATE_S2S_SPEAKING)
             status_text = "speaking...";
+#if S2S_TEXT_INPUT
+        if (_textMode && _appState == APP_STATE_S2S_LISTENING)
+            status_text = "ENTER to type";
+        else if (_textMode && _appState == APP_STATE_S2S_SPEAKING)
+            status_text = "answering...";
+#endif
         else if (_appState == APP_STATE_S2S_ERROR)
             status_text = "reconnecting...";
 
@@ -941,11 +999,24 @@ void GeminiApp::handleResponseScreenInput()
                 }
             }
         }
+#if S2S_TEXT_INPUT
+        else if (_hal->keyboard()->isKeyPressing(KEY_NUM_TAB) && _appState == APP_STATE_S2S_LISTENING)
+        {
+            _hal->keyboard()->waitForRelease(KEY_NUM_TAB);
+            setTextMode(!_textMode);
+            is_rendered = false;
+            if (_textMode)
+                typeMessage();
+        }
+#endif
         else if (_hal->keyboard()->isKeyPressing(KEY_NUM_ESC) || _hal->keyboard()->isKeyPressing(KEY_NUM_BACKSPACE))
         {
             _hal->keyboard()->waitForRelease(KEY_NUM_ESC);
             _hal->playNextSound();
             stopS2S();
+#if S2S_TEXT_INPUT
+            _textMode = false;
+#endif
             setState(APP_STATE_IDLE);
             _partialPrompt = "";
             _currentScreen = SCREEN_START;
@@ -957,6 +1028,13 @@ void GeminiApp::handleResponseScreenInput()
             _hal->playNextSound();
             is_rendered = false;
 
+#if S2S_TEXT_INPUT
+            if (_textMode && _appState == APP_STATE_S2S_LISTENING)
+            {
+                typeMessage();
+            }
+            else
+#endif
             if (_appState == APP_STATE_S2S_LISTENING || _appState == APP_STATE_S2S_SPEAKING)
             {
                 xEventGroupSetBits(_control_event_group, S2S_USER_INTERRUPT_BIT);
@@ -1190,6 +1268,18 @@ bool GeminiApp::drawAnimation(bool need_update, bool small)
         const int x = _hal->canvas()->width() - 3 - CHAT_ICON_SIZE;
         const int y = _hal->canvas()->height() - HINT_HEIGHT;
         _hal->canvas()->fillRect(x, y, CHAT_ICON_SIZE, CHAT_ICON_SIZE, THEME_COLOR_BG);
+#if S2S_TEXT_INPUT
+        if (_textMode && _appState == APP_STATE_S2S_LISTENING)
+        {
+            // keyboard, in place of the microphone
+            const uint32_t color = icon_color(0xFFC000, level);
+            _hal->canvas()->drawRoundRect(x, y + 2, 11, 8, 1, color);
+            for (int kx = 2; kx <= 8; kx += 2)
+                _hal->canvas()->drawPixel(x + kx, y + 4, color);
+            _hal->canvas()->drawFastHLine(x + 3, y + 7, 5, color);
+            return true;
+        }
+#endif
         draw_status_icon(_hal->canvas(), _appState, x, y, level);
         return true;
     }

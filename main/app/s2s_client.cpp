@@ -589,6 +589,37 @@ static bool s2s_send_audio(s2s_context_t* ctx, const uint8_t* pcm, size_t pcm_le
     return sent == (int)total;
 }
 
+#if S2S_TEXT_INPUT
+// ═══════════════════════════════════════════════════════════
+// Send a typed message as the user's turn. The session stays an audio session (the
+// Live models only answer in audio): the reply comes back spoken, with its
+// transcription, like the reply to a spoken turn.
+// ═══════════════════════════════════════════════════════════
+static bool s2s_send_text(s2s_context_t* ctx)
+{
+    std::string text;
+    if (xSemaphoreTake(ctx->shared->mutex, pdMS_TO_TICKS(100)) == pdTRUE)
+    {
+        text.swap(ctx->shared->pending_text);
+        xSemaphoreGive(ctx->shared->mutex);
+    }
+    if (text.empty())
+        return false;
+
+    int n = mjson_snprintf(s_json_buf,
+                           sizeof(s_json_buf),
+                           "{\"clientContent\":{\"turns\":[{\"role\":\"user\",\"parts\":[{\"text\":%Q}]}],\"turnComplete\":true}}",
+                           text.c_str());
+    if (n <= 0 || n >= (int)sizeof(s_json_buf))
+    {
+        ESP_LOGE(TAG, "Text message too large");
+        return false;
+    }
+    ESP_LOGI(TAG, "Sending text turn (%d bytes)", n);
+    return esp_websocket_client_send_text(ctx->ws_client, s_json_buf, n, pdMS_TO_TICKS(3000)) == n;
+}
+#endif
+
 // ═══════════════════════════════════════════════════════════
 // Main S2S client task
 // ═══════════════════════════════════════════════════════════
@@ -658,12 +689,23 @@ static void s2s_client_task(void* parameter)
 
         ctx->hal->speaker()->end();
         vTaskDelay(pdMS_TO_TICKS(20));
-        // The mic defaults to 8 kHz: started like that, the first record() after a
-        // reset had to stop it and start it again at 16 kHz
-        ctx->hal->mic()->setSampleRate(S2S_MIC_SAMPLE_RATE);
-        ctx->hal->mic()->begin();
+        bool mic_on = true;
+#if S2S_TEXT_INPUT
+        // nothing is recorded while the user types
+        mic_on = !(xEventGroupGetBits(ctx->event_group) & S2S_TEXT_MODE_BIT);
+#endif
+        if (mic_on)
+        {
+            // The mic defaults to 8 kHz: started like that, the first record() after a
+            // reset had to stop it and start it again at 16 kHz
+            ctx->hal->mic()->setSampleRate(S2S_MIC_SAMPLE_RATE);
+            ctx->hal->mic()->begin();
+        }
         xEventGroupSetBits(ctx->event_group, S2S_LISTENING_BIT);
-        ESP_LOGI(TAG, "Listening...");
+        if (mic_on)
+            ESP_LOGI(TAG, "Listening...");
+        else
+            ESP_LOGI(TAG, "Waiting for text...");
 
         // Circular mic buffer pattern (matches M5Unified DMA pipeline)
         int rec_wr = 0, rec_queued = 0;
@@ -676,6 +718,41 @@ static void s2s_client_task(void* parameter)
             bits = xEventGroupGetBits(ctx->event_group);
             if (bits & (S2S_STOP_REQUEST_BIT | S2S_ERROR_BIT | S2S_MODEL_SPEAKING_BIT | S2S_USER_INTERRUPT_BIT))
                 break;
+
+#if S2S_TEXT_INPUT
+            if (bits & S2S_SEND_TEXT_BIT)
+            {
+                xEventGroupClearBits(ctx->event_group, S2S_SEND_TEXT_BIT);
+                s2s_send_text(ctx);
+            }
+            if (bits & S2S_TEXT_MODE_BIT)
+            {
+                if (mic_on)
+                {
+                    // switched to typing: what was recorded so far is not a turn
+                    esp_websocket_client_send_text(ctx->ws_client, JSON_STREAM_END, sizeof(JSON_STREAM_END) - 1, pdMS_TO_TICKS(2000));
+                    ctx->hal->mic()->end();
+                    mic_on = false;
+                    pcm_pos = 0;
+                    ESP_LOGI(TAG, "Waiting for text...");
+                }
+                vTaskDelay(pdMS_TO_TICKS(20));
+                continue;
+            }
+            if (!mic_on)
+            {
+                // back to voice
+                ctx->hal->speaker()->end();
+                vTaskDelay(pdMS_TO_TICKS(20));
+                ctx->hal->mic()->setSampleRate(S2S_MIC_SAMPLE_RATE);
+                ctx->hal->mic()->begin();
+                mic_on = true;
+                rec_wr = rec_queued = 0;
+                mic_warmed = false;
+                warmup_skip = 0;
+                ESP_LOGI(TAG, "Listening...");
+            }
+#endif
 
             if (!ctx->hal->mic()->record(s_rec_buf[rec_wr], MIC_BUF_SAMPLES, S2S_MIC_SAMPLE_RATE, false))
                 continue;
@@ -728,14 +805,17 @@ static void s2s_client_task(void* parameter)
             }
         }
 
-        // Flush remaining PCM
-        if (pcm_pos > 0)
-            s2s_send_audio(ctx, s_pcm_buf, pcm_pos);
+        if (mic_on)
+        {
+            // Flush remaining PCM
+            if (pcm_pos > 0)
+                s2s_send_audio(ctx, s_pcm_buf, pcm_pos);
 
-        // Tell server mic stream paused
-        esp_websocket_client_send_text(ctx->ws_client, JSON_STREAM_END, sizeof(JSON_STREAM_END) - 1, pdMS_TO_TICKS(2000));
+            // Tell server mic stream paused
+            esp_websocket_client_send_text(ctx->ws_client, JSON_STREAM_END, sizeof(JSON_STREAM_END) - 1, pdMS_TO_TICKS(2000));
 
-        ctx->hal->mic()->end();
+            ctx->hal->mic()->end();
+        }
         xEventGroupClearBits(ctx->event_group, S2S_LISTENING_BIT);
 
         if (xEventGroupGetBits(ctx->event_group) & (S2S_STOP_REQUEST_BIT | S2S_ERROR_BIT))
@@ -765,15 +845,28 @@ static void s2s_client_task(void* parameter)
         //     }
         // }
 
-        vTaskDelay(pdMS_TO_TICKS(20));
-        ctx->hal->speaker()->begin();
-        ctx->hal->speaker()->setVolume(255);
-        ctx->hal->speaker()->setChannelVolume(AUDIO_CHANNEL, ctx->volume);
-        // Let the codec volume ramp and amplifier come up before the first samples,
-        // otherwise the start of the first word is played muted. Audio keeps
-        // collecting in the ring buffer meanwhile, so nothing is skipped.
-        vTaskDelay(pdMS_TO_TICKS(150));
-        ESP_LOGI(TAG, "Playing response...");
+        // In text mode the reply is read, not heard: its audio is taken out of the
+        // ring buffer and thrown away, which also ends the turn as soon as the last of
+        // it has arrived instead of after its playing time.
+        bool muted = false;
+#if S2S_TEXT_INPUT
+        muted = xEventGroupGetBits(ctx->event_group) & S2S_TEXT_MODE_BIT;
+#endif
+        if (!muted)
+        {
+            vTaskDelay(pdMS_TO_TICKS(20));
+            ctx->hal->speaker()->begin();
+            ctx->hal->speaker()->setVolume(255);
+            ctx->hal->speaker()->setChannelVolume(AUDIO_CHANNEL, ctx->volume);
+            // Let the codec volume ramp and amplifier come up before the first samples,
+            // otherwise the start of the first word is played muted. Audio keeps
+            // collecting in the ring buffer meanwhile, so nothing is skipped.
+            vTaskDelay(pdMS_TO_TICKS(150));
+        }
+        if (muted)
+            ESP_LOGI(TAG, "Receiving response (muted)...");
+        else
+            ESP_LOGI(TAG, "Playing response...");
 
         bool turn_ended = false;
         uint32_t total_bytes = 0;
@@ -837,7 +930,7 @@ static void s2s_client_task(void* parameter)
                 size_t total_samples = dst_off + pcm_len / sizeof(int16_t);
                 total_bytes += total_samples * sizeof(int16_t);
 
-                if (total_samples > 0)
+                if (total_samples > 0 && !muted)
                 {
                     ctx->crc_played =
                         esp_rom_crc32_le(ctx->crc_played, (const uint8_t*)play_buf[buf_idx], total_samples * sizeof(int16_t));
@@ -854,7 +947,7 @@ static void s2s_client_task(void* parameter)
             {
                 break;
             }
-            else
+            else if (!muted)
             {
                 underruns++;
                 ESP_LOGW(TAG,
@@ -876,13 +969,18 @@ static void s2s_client_task(void* parameter)
                      ? " **MISMATCH**"
                      : "");
 
-        ESP_LOGI(TAG,
-                 "CRC check: received=0x%08lx played=0x%08lx %s",
-                 (unsigned long)ctx->crc_received,
-                 (unsigned long)ctx->crc_played,
-                 (ctx->crc_received == ctx->crc_played) ? "MATCH" : "**MISMATCH**");
+        if (!muted)
+            ESP_LOGI(TAG,
+                     "CRC check: received=0x%08lx played=0x%08lx %s",
+                     (unsigned long)ctx->crc_received,
+                     (unsigned long)ctx->crc_played,
+                     (ctx->crc_received == ctx->crc_played) ? "MATCH" : "**MISMATCH**");
 
-        if (xEventGroupGetBits(ctx->event_group) & (S2S_INTERRUPTED_BIT | S2S_USER_INTERRUPT_BIT))
+        if (muted)
+        {
+            // nothing was handed to the speaker
+        }
+        else if (xEventGroupGetBits(ctx->event_group) & (S2S_INTERRUPTED_BIT | S2S_USER_INTERRUPT_BIT))
         {
             ctx->hal->speaker()->stop();
             size_t discard_size;
@@ -895,7 +993,8 @@ static void s2s_client_task(void* parameter)
             while (ctx->hal->speaker()->isPlaying(AUDIO_CHANNEL))
                 vTaskDelay(1);
         }
-        ctx->hal->speaker()->stop();
+        if (!muted)
+            ctx->hal->speaker()->stop();
         ESP_LOGI(TAG, "Turn done");
     }
 

@@ -21,6 +21,17 @@
 #define S2S_OUTPUT_TRANSCRIPT_BIT (1 << 11)
 #define S2S_USER_INTERRUPT_BIT    (1 << 12)
 #define S2S_FATAL_ERROR_BIT       (1 << 13)
+// Text mode: the microphone is off and replies are not played, only transcribed
+#define S2S_TEXT_MODE_BIT         (1 << 14)
+// S2SSharedData::pending_text is waiting to be sent as the user's turn
+#define S2S_SEND_TEXT_BIT         (1 << 15)
+
+// Typed messages need a keyboard, which the StickS3 does not have
+#ifdef CONFIG_BOARD_STICKS3
+#define S2S_TEXT_INPUT 0
+#else
+#define S2S_TEXT_INPUT 1
+#endif
 
 #define S2S_MIC_SAMPLE_RATE  16000
 #define S2S_SPK_SAMPLE_RATE  24000
@@ -32,6 +43,9 @@ struct S2SSharedData
     std::string output_transcript;
     std::string session_handle;
     std::string error_message;
+#if S2S_TEXT_INPUT
+    std::string pending_text;
+#endif
 };
 
 bool s2s_start(HAL::Hal* hal, EventGroupHandle_t event_group, S2SSharedData* shared,
