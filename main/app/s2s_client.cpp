@@ -18,13 +18,31 @@ static const char* TAG = "S2S";
 
 #define MIC_BUF_SAMPLES 256
 #define MIC_REC_BLOCKS 3
+#ifdef CONFIG_BOARD_STICKS3
 #define PCM_SEND_BYTES 3200 // 100ms at 16kHz 16-bit mono
+#else
+// 50 ms. Each chunk goes out as one TLS record, whose buffer is allocated while a
+// record may be coming in: at 100 ms that allocation failed often enough on the
+// Cardputer's heap to drop a voice session every few turns.
+#define PCM_SEND_BYTES 1600
+#endif
 #define PLAY_CHUNK_SIZE 1024
 
+// The Cardputer runs short of heap during a session, so these two are halved there.
+// A WebSocket frame longer than the buffer is handed over, or sent, in pieces; a
+// server message longer than MSG_BUF_CAPACITY without its audio is dropped.
+#ifdef CONFIG_BOARD_STICKS3
 #define WS_BUFFER_SIZE 4096
+#else
+#define WS_BUFFER_SIZE 2048
+#endif
 // Holds a server message with its audio payload taken out (see s2s_feed), so it
 // only needs to fit the JSON around it and the transcription text.
+#ifdef CONFIG_BOARD_STICKS3
 #define MSG_BUF_CAPACITY (1024 * 8)
+#else
+#define MSG_BUF_CAPACITY (1024 * 4)
+#endif
 #define AUDIO_DECODE_CHUNK 1536
 
 // JSON template for audio send — prefix/suffix are fixed, base64 payload goes in between
@@ -703,21 +721,25 @@ static void s2s_client_task(void* parameter)
     }
 
 #if S2S_CHAT_MEMORY
-    if (ctx->seed_history)
     {
+        // Taken, not copied, and taken even by a resumed session that has no use for
+        // it: a session has no memory to keep it in. The app writes it again before
+        // every start.
         std::string history;
         if (xSemaphoreTake(ctx->shared->mutex, pdMS_TO_TICKS(100)) == pdTRUE)
         {
-            // taken, not copied: the app writes it again before every start
             history.swap(ctx->shared->history);
             xSemaphoreGive(ctx->shared->mutex);
         }
-        ESP_LOGI(TAG, "Sending the conversation so far (%d bytes)", (int)history.size());
-        if (esp_websocket_client_send_text(ctx->ws_client, history.c_str(), history.size(), pdMS_TO_TICKS(5000)) != (int)history.size())
+        if (ctx->seed_history)
         {
-            ESP_LOGE(TAG, "Failed to send the conversation so far");
-            xEventGroupSetBits(ctx->event_group, S2S_ERROR_BIT);
-            goto exit;
+            ESP_LOGI(TAG, "Sending the conversation so far (%d bytes)", (int)history.size());
+            if (esp_websocket_client_send_text(ctx->ws_client, history.c_str(), history.size(), pdMS_TO_TICKS(5000)) != (int)history.size())
+            {
+                ESP_LOGE(TAG, "Failed to send the conversation so far");
+                xEventGroupSetBits(ctx->event_group, S2S_ERROR_BIT);
+                goto exit;
+            }
         }
     }
 #endif
@@ -866,12 +888,23 @@ static void s2s_client_task(void* parameter)
 
         if (mic_on)
         {
-            // Flush remaining PCM
-            if (pcm_pos > 0)
-                s2s_send_audio(ctx, s_pcm_buf, pcm_pos);
+#ifndef CONFIG_BOARD_STICKS3
+            // Not when the reply has already begun. The WebSocket task then holds the
+            // client's lock while it waits for room in the speaker buffer, which only
+            // this task can make: a send from here waits for that lock, and the two
+            // sit out their timeouts. The reply started two seconds late and lost
+            // 32 ms of audio whenever its first burst filled the buffer. The server
+            // has ended the user's turn by itself, so it is not waiting for these.
+            if (!(xEventGroupGetBits(ctx->event_group) & S2S_MODEL_SPEAKING_BIT))
+#endif
+            {
+                // Flush remaining PCM
+                if (pcm_pos > 0)
+                    s2s_send_audio(ctx, s_pcm_buf, pcm_pos);
 
-            // Tell server mic stream paused
-            esp_websocket_client_send_text(ctx->ws_client, JSON_STREAM_END, sizeof(JSON_STREAM_END) - 1, pdMS_TO_TICKS(2000));
+                // Tell server mic stream paused
+                esp_websocket_client_send_text(ctx->ws_client, JSON_STREAM_END, sizeof(JSON_STREAM_END) - 1, pdMS_TO_TICKS(2000));
+            }
 
             ctx->hal->mic()->end();
         }
