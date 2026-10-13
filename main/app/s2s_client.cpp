@@ -18,14 +18,10 @@ static const char* TAG = "S2S";
 
 #define MIC_BUF_SAMPLES 256
 #define MIC_REC_BLOCKS 3
-#ifdef CONFIG_BOARD_STICKS3
-#define PCM_SEND_BYTES 3200 // 100ms at 16kHz 16-bit mono
-#else
-// 50 ms. Each chunk goes out as one TLS record, whose buffer is allocated while a
-// record may be coming in: at 100 ms that allocation failed often enough on the
-// Cardputer's heap to drop a voice session every few turns.
+// 50 ms at 16 kHz 16-bit mono. On the Cardputer a 100 ms chunk took 50 to 200 ms
+// to send and needed a TLS record buffer that its heap could not always supply; a
+// 50 ms chunk goes out in 8 to 22 ms there and in 3 to 4 ms on the StickS3.
 #define PCM_SEND_BYTES 1600
-#endif
 #define PLAY_CHUNK_SIZE 1024
 
 // The Cardputer runs short of heap during a session, so these two are halved there.
@@ -888,7 +884,6 @@ static void s2s_client_task(void* parameter)
 
         if (mic_on)
         {
-#ifndef CONFIG_BOARD_STICKS3
             // Not when the reply has already begun. The WebSocket task then holds the
             // client's lock while it waits for room in the speaker buffer, which only
             // this task can make: a send from here waits for that lock, and the two
@@ -896,7 +891,6 @@ static void s2s_client_task(void* parameter)
             // 32 ms of audio whenever its first burst filled the buffer. The server
             // has ended the user's turn by itself, so it is not waiting for these.
             if (!(xEventGroupGetBits(ctx->event_group) & S2S_MODEL_SPEAKING_BIT))
-#endif
             {
                 // Flush remaining PCM
                 if (pcm_pos > 0)
