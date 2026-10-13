@@ -113,57 +113,27 @@ bool HalStickS3::isCharging() { return _pm1 && _pm1->is_charging(); }
 //
 // The speaker driver's default x16 is the Cardputer's. Here the ES8311 already plays
 // at 0 dB into the amplifier, so high gain clips hard and the amplifier draws its peak
-// current for long stretches. The 250 mAh cell cannot supply that together with the
-// WiFi bursts: its voltage sags and the chip takes a brownout reset. Measured on
-// battery at full volume: x4 is stable on a near-full cell, x6 resets.
-// A weaker cell sags sooner, so the gain steps down as it empties.
-static constexpr uint8_t GAIN_USB = 8;
-static constexpr struct
-{
-    uint16_t min_mv;
-    uint8_t gain;
-} GAIN_BATTERY[] = {{3850, 4}, {3700, 3}, {0, 2}};
-static constexpr uint16_t GAIN_HYSTERESIS_MV = 50;
+// current for long stretches. The 250 mAh cell cannot always supply that together
+// with the WiFi bursts: at full volume on battery x4 was stable and x6 took a brownout
+// reset. x6 is used anyway, as the volume is not meant to be run at 100% and x4 is too
+// quiet below that; a brownout restart is reported on screen after boot.
+static constexpr uint8_t GAIN_USB = 10;
+static constexpr uint8_t GAIN_BATTERY = 6;
 
 void HalStickS3::_update_speaker_gain(bool log_change)
 {
     if (!_speaker || !_pm1 || !_pm1->is_initialized())
         return;
 
-    static uint16_t battery_mv = 0;
-    static uint32_t next_battery_read = 0;
-
     const bool usb = _pm1->is_usb_powered();
-    uint8_t gain = GAIN_USB;
-    if (!usb)
-    {
-        // the cell voltage moves slowly: read it now and then, the power source every time
-        const uint32_t now = millis();
-        if (battery_mv == 0 || now >= next_battery_read)
-        {
-            const uint16_t mv = _pm1->get_battery_mv();
-            if (mv > 0)
-                battery_mv = mv;
-            next_battery_read = now + 5000;
-        }
-
-        gain = GAIN_BATTERY[0].gain;
-        for (const auto& step : GAIN_BATTERY)
-        {
-            gain = step.gain;
-            // going back up to a louder step needs the voltage clearly above its threshold
-            const uint16_t threshold = step.min_mv + (step.gain > _speaker_gain ? GAIN_HYSTERESIS_MV : 0);
-            if (battery_mv >= threshold)
-                break;
-        }
-    }
+    const uint8_t gain = usb ? GAIN_USB : GAIN_BATTERY;
 
     if (gain != _speaker_gain)
     {
         _speaker_gain = gain;
         _speaker->setMagnification(gain);
         if (log_change)
-            ESP_LOGI(TAG, "speaker gain x%d (%s, battery %d mV)", gain, usb ? "USB" : "battery", battery_mv);
+            ESP_LOGI(TAG, "speaker gain x%d (%s)", gain, usb ? "USB" : "battery");
     }
 }
 
