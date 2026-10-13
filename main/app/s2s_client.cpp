@@ -545,6 +545,10 @@ static bool s2s_send_setup(s2s_context_t* ctx)
                      "\"model\":\"%s\","
                      "\"generationConfig\":{\"responseModalities\":[\"AUDIO\"]%s},"
                      "%s"
+                     // The server decides when the user has stopped talking. Left at its
+                     // default it took up to 3.7 s to answer a short phrase, long enough
+                     // that people repeated themselves, which restarted the wait.
+                     "\"realtimeInputConfig\":{\"automaticActivityDetection\":{\"silenceDurationMs\":500}},"
                      "\"inputAudioTranscription\":{},"
                      "\"outputAudioTranscription\":{},"
                      "\"sessionResumption\":{%s}"
@@ -654,6 +658,9 @@ static void s2s_client_task(void* parameter)
 
         ctx->hal->speaker()->end();
         vTaskDelay(pdMS_TO_TICKS(20));
+        // The mic defaults to 8 kHz: started like that, the first record() after a
+        // reset had to stop it and start it again at 16 kHz
+        ctx->hal->mic()->setSampleRate(S2S_MIC_SAMPLE_RATE);
         ctx->hal->mic()->begin();
         xEventGroupSetBits(ctx->event_group, S2S_LISTENING_BIT);
         ESP_LOGI(TAG, "Listening...");

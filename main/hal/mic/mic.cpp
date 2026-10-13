@@ -214,6 +214,9 @@ namespace HAL
         }
 
         size_t stack_size = 2048 + (_cfg.dma_buf_len * sizeof(uint16_t));
+        // remember the rate the task starts at, or the first record() sees a mismatch
+        // and restarts the codec that was only just brought up
+        _rec_sample_rate = _calc_rec_rate();
         _task_running = true;
 
 #if portNUM_PROCESSORS > 1
