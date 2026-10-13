@@ -9,12 +9,20 @@
 #include "app/utils/web/web_setup.h"
 #include "common_define.h"
 #include <cstdio>
+#include <sys/stat.h>
 #include <string>
 #include <vector>
 #include <map>
 
 static const char* TAG = "SETTINGS";
+#if HAL_USE_SDCARD
+static const std::string SETTINGS_FILE_NAME = "/sdcard/M5Gemini/settings.txt";
+static const char* SETTINGS_DIR = "/sdcard/M5Gemini";
+// where the file was kept up to 3.4: still read if there is none in the folder
+static const std::string OLD_SETTINGS_FILE_NAME = "/sdcard/settings.txt";
+#else
 static const std::string SETTINGS_FILE_NAME = "/sdcard/settings.txt";
+#endif
 static const char* WIFI_NETWORKS_KEY = "nets";
 static const char WIFI_FIELD_SEP = '\x1f';
 static const char WIFI_RECORD_SEP = '\x1e';
@@ -196,7 +204,7 @@ namespace SETTINGS
 #endif
 
 #if HAL_USE_SDCARD
-        SettingItem_t export_item = {"", "Export", TYPE_CALLBACK, "", "", "", "", "Save all settings to settings.txt on the SD card"};
+        SettingItem_t export_item = {"", "Export", TYPE_CALLBACK, "", "", "", "", "Save all settings to /M5Gemini/settings.txt on the SD card"};
         export_item.callback = [this](SETTINGS::SettingItem_t& item)
         {
             if (!_hal)
@@ -206,10 +214,14 @@ namespace SETTINGS
                 _hal->sdcard()->mount(false);
             if (_hal->sdcard()->is_mounted())
             {
-                exportToFile(SETTINGS_FILE_NAME);
+                mkdir(SETTINGS_DIR, 0775);
+                const bool exported = exportToFile(SETTINGS_FILE_NAME);
                 if (!sdcard_mounted)
                     _hal->sdcard()->eject();
-                UTILS::UI::show_message_dialog(_hal, "Success", "Settings saved to: " + SETTINGS_FILE_NAME, 0);
+                if (exported)
+                    UTILS::UI::show_message_dialog(_hal, "Success", "Settings saved to: " + SETTINGS_FILE_NAME, 0);
+                else
+                    UTILS::UI::show_error_dialog(_hal, "Error", "Could not write " + SETTINGS_FILE_NAME, "OK");
             }
             else
             {
@@ -217,7 +229,7 @@ namespace SETTINGS
             }
         };
 
-        SettingItem_t import_item = {"", "Import", TYPE_CALLBACK, "", "", "", "", "Load the settings from settings.txt on the SD card"};
+        SettingItem_t import_item = {"", "Import", TYPE_CALLBACK, "", "", "", "", "Load the settings from /M5Gemini/settings.txt on the SD card"};
         import_item.callback = [this](SETTINGS::SettingItem_t& item)
         {
             if (!_hal)
@@ -227,9 +239,16 @@ namespace SETTINGS
                 _hal->sdcard()->mount(false);
             if (_hal->sdcard()->is_mounted())
             {
-                importFromFile(SETTINGS_FILE_NAME);
+                struct stat st;
+                const std::string& file_name = stat(SETTINGS_FILE_NAME.c_str(), &st) == 0 ? SETTINGS_FILE_NAME : OLD_SETTINGS_FILE_NAME;
+                const bool imported = importFromFile(file_name);
                 if (!sdcard_mounted)
                     _hal->sdcard()->eject();
+                if (!imported)
+                {
+                    UTILS::UI::show_error_dialog(_hal, "Error", "No settings in " + SETTINGS_FILE_NAME, "OK");
+                    return;
+                }
 #if HAL_USE_WIFI
                 UTILS::UI::show_progress(_hal, "WiFi", -1, "Stopping...");
                 delay(500);
@@ -241,7 +260,7 @@ namespace SETTINGS
                     _hal->wifi()->connect();
                 }
 #endif
-                UTILS::UI::show_message_dialog(_hal, "Success", "Loaded from: " + SETTINGS_FILE_NAME, 0);
+                UTILS::UI::show_message_dialog(_hal, "Success", "Loaded from: " + file_name, 0);
             }
             else
             {
