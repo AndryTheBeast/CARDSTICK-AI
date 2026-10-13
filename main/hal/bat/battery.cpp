@@ -182,71 +182,16 @@ uint8_t Battery::get_level()
 
 uint8_t Battery::get_level(float voltage)
 {
-    // LiPo 1S discharge curve: voltage to percentage lookup table
-    // Based on typical LiPo discharge characteristics
-    static const struct
-    {
-        float voltage;
-        uint8_t percentage;
-    } lipo_curve[] = {
-        {4.20f, 100},
-        {4.15f, 95},
-        {4.11f, 90},
-        {4.08f, 85},
-        {4.02f, 80},
-        {3.98f, 75},
-        {3.95f, 70},
-        {3.91f, 65},
-        {3.87f, 60},
-        {3.85f, 55},
-        {3.84f, 50},
-        {3.82f, 45},
-        {3.80f, 40},
-        {3.79f, 35},
-        {3.77f, 30},
-        {3.75f, 25},
-        {3.73f, 20},
-        {3.71f, 15},
-        {3.69f, 10},
-        {3.61f, 5},
-        {3.27f, 0}};
+    // Straight line from 3.30 V (empty) to 4.10 V (full), shared by all boards. This is
+    // the formula M5Unified, M5Launcher and Bruce use for these devices, so the number
+    // agrees with theirs. A LiPo-shaped curve was tried and read far lower in mid-range
+    // (15% where they show 51%).
+    static constexpr float EMPTY_V = 3.30f;
+    static constexpr float FULL_V = 4.10f;
 
-    const int table_size = sizeof(lipo_curve) / sizeof(lipo_curve[0]);
-
-    // Handle out of range cases
-    if (voltage >= lipo_curve[0].voltage)
-    {
-        return 100; // Fully charged or overcharged
-    }
-    if (voltage <= lipo_curve[table_size - 1].voltage)
-    {
-        return 0; // Empty or below cutoff
-    }
-
-    // Linear interpolation between table points
-    for (int i = 0; i < table_size - 1; i++)
-    {
-        if (voltage >= lipo_curve[i + 1].voltage)
-        {
-            // Found the right segment, interpolate
-            float v_high = lipo_curve[i].voltage;
-            float v_low = lipo_curve[i + 1].voltage;
-            uint8_t p_high = lipo_curve[i].percentage;
-            uint8_t p_low = lipo_curve[i + 1].percentage;
-
-            // Linear interpolation formula: p = p_low + (voltage - v_low) * (p_high - p_low) / (v_high - v_low)
-            float percentage = p_low + (voltage - v_low) * (p_high - p_low) / (v_high - v_low);
-
-            // Clamp to valid range and round
-            if (percentage > 100.0f)
-                percentage = 100.0f;
-            if (percentage < 0.0f)
-                percentage = 0.0f;
-
-            return static_cast<uint8_t>(percentage + 0.5f); // Round to nearest integer
-        }
-    }
-
-    // Should never reach here, but return 0 as fallback
-    return 0;
+    if (voltage >= FULL_V)
+        return 100;
+    if (voltage <= EMPTY_V)
+        return 0;
+    return static_cast<uint8_t>((voltage - EMPTY_V) * 100.0f / (FULL_V - EMPTY_V));
 }
