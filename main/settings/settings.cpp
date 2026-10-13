@@ -160,7 +160,8 @@ namespace SETTINGS
         chat_group.items = {
             back_item,
             {"remember", "Remember chats", TYPE_BOOL, "true", "true", "", "", "Save chats to the SD card and offer to continue one when starting"},
-            // the app shows the list: it is the one that knows where the chats are
+            // the app shows the lists: it is the one that knows where the chats are
+            {"", "View chats", TYPE_CALLBACK, "", "", "", "", "Read saved chats, and edit or delete their messages"},
             {"", "Forget chats", TYPE_CALLBACK, "", "", "", "", "Choose saved chats to delete from the SD card, or delete them all"},
         };
 #endif

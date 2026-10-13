@@ -402,7 +402,7 @@ void GeminiApp::init()
 #endif
 
 #if S2S_CHAT_MEMORY
-    // "Forget chats" in "Chat settings" opens the list to forget from
+    // the rows of "Chat settings" that open a list of the chats
     for (auto& group : _groups)
     {
         if (group.nvs_namespace != CHAT_NS)
@@ -411,14 +411,17 @@ void GeminiApp::init()
         {
             if (item.type != SETTINGS::TYPE_CALLBACK)
                 continue;
-            item.callback = [this](SETTINGS::SettingItem_t&)
+            item.callback = [this](SETTINGS::SettingItem_t& row)
             {
                 if (!CHAT_STORE::mount(_hal))
                 {
                     UTILS::UI::show_error_dialog(_hal, "Error", "Failed to mount SD card", "OK");
                     return;
                 }
-                CHAT_STORE::forget(_hal);
+                if (row.label == "Forget chats")
+                    CHAT_STORE::forget(_hal);
+                else
+                    CHAT_STORE::view(_hal);
                 CHAT_STORE::unmount(_hal);
             };
         }

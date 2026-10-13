@@ -43,6 +43,9 @@ namespace CHAT_STORE
     // An empty handle removes the saved one
     void save_handle(int id, const std::string& handle);
 
+    // The same list, to read chats from, and to edit or delete their messages. TAB
+    // does the same from the list of pick().
+    void view(HAL::Hal* hal);
     // The same list, to delete chats from: one at a time, or all of them
     void forget(HAL::Hal* hal);
 
