@@ -1,3 +1,17 @@
+v4.0
+
+- The project is now CARDSTICK AI, in its own repository. The home screen says CARDPUTER AI or STICK AI, and the release files are CARDPUTER_AI.bin and STICK_AI.bin
+- Cardputer: chat memory. Each chat is saved to the SD card and can be reopened and continued; Gemini picks up where it left off. "Chat settings" has Remember chats, View chats and Forget chats
+- Cardputer: chat viewer. Read a saved chat, and edit or delete its messages
+- Cardputer: voice chats no longer lose the connection every few turns or on a long reply. A session now has the memory it needs
+- Cardputer: settings.txt lives in the M5Gemini folder of the SD card. Import still reads an old /settings.txt
+- Cardputer: Export and Import can be used more than once without restarting
+- Cardputer: Auto sleep timer, in the Sleep menu together with the Sleep button
+- StickS3: Auto power off timer, in the Power off menu together with the Power off button
+- StickS3: long replies no longer drop the connection
+- The first words of the first chat after switching on are heard. The microphone took about six seconds to reach its level
+- The chat screen follows the last line of a reply that is longer than the screen
+- After about ten minutes Google ends the connection: the reply in progress is now finished before the session reconnects and resumes
 v3.4
 
 - Cardputer: type to Gemini. The start screen offers Live and Text; TAB on the chat screen switches between them. In Text the microphone is off, ENTER opens a message box, and the reply is shown as text without being spoken

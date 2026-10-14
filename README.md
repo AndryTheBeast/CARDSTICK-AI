@@ -1,155 +1,147 @@
-# M5Gemini
+# CARDSTICK AI
 
-M5Gemini is a voice-driven AI assistant for the ESP32-S3 powered M5 Cardputer mini PC. It uses Google Gemini's Live API for real-time Speech-to-Speech (S2S) conversation over a single WebSocket connection. The application uses the M5 Cardputer's built-in microphone and speaker for hands-free interaction.
+CARDSTICK AI is a voice and text assistant for the M5Stack Cardputer and the M5StickS3. It talks to Google's Gemini Live API over a single WebSocket connection: you speak, Gemini answers through the speaker, and the conversation is written on the screen as it goes. On the Cardputer you can also type, and chats are saved to the SD card so they can be continued later.
+
+On the device it is called **CARDPUTER AI** on the Cardputer and **STICK AI** on the StickS3.
+
+It started as a fork of [M5Gemini](https://github.com/d4rkmen/M5Gemini) by d4rkmen and grew into its own project. See [Credits](#credits).
 
 ## Features
 
-- Real-time voice conversation powered by Google Gemini Live API (Speech-to-Speech).
-- Half-duplex audio: microphone and speaker alternate automatically via server-side VAD.
-- Streaming text transcription displayed during playback.
-- Configurable model, voice, and system instructions.
-- Automatic session reconnection on transient errors; error dialogs for critical failures.
-- Settings management compatible with M5Apps installer.
+Both devices
 
-## Prerequisites
+- Real-time voice conversation with the Gemini Live API (speech to speech), with the text of both sides shown on screen.
+- Half-duplex audio: the microphone and the speaker alternate, and Gemini's own voice activity detection ends your turn.
+- Long sessions: when Google ends a connection after about ten minutes, the current reply is finished first and the session then resumes with its context.
+- Web setup: edit WiFi networks, the API key and every other setting from a phone or PC browser.
+- Up to 8 saved WiFi networks; the strongest one in range is used.
+- Battery indicator, and a sleep or power-off timer for when the device is left alone.
+- Configurable model, voice, volume and system instructions.
 
-- ESP-IDF v5.4 or later
-- M5 Cardputer hardware
-- WiFi internet connection (2.4GHz) for API access
-- Google AI API Key (https://aistudio.google.com/apikey)
+Cardputer only
 
-## Getting Started
+- Typed chat: choose `Live` or `Text` on the start screen and switch with `TAB` inside a chat.
+- Chat memory: each chat is saved to the SD card and can be reopened, continued, read, edited or deleted.
+- RGB status LED with a colour, effect and speed per state.
+- Settings export and import on the SD card.
+- Deep sleep, woken with `G0`.
 
-### 1. Clone the Repository
+StickS3 only
+
+- Two-button navigation.
+- Power off through the power chip.
+
+## Hardware
+
+| Device | Status |
+|---|---|
+| M5Stack Cardputer ADV | Tested |
+| M5StickS3 | Tested |
+| M5Stack Cardputer (original) | Builds from the same image, not tested |
+
+You also need a 2.4 GHz WiFi connection and a Google AI API key from <https://aistudio.google.com/apikey>.
+
+## Install
+
+Download the image for your device from the [releases page](https://github.com/AndryTheBeast/CARDSTICK-AI/releases):
+
+| File | Device |
+|---|---|
+| `CARDPUTER_AI.bin` | Cardputer and Cardputer ADV |
+| `STICK_AI.bin` | M5StickS3 |
+
+Both are full images. Install them through M5Launcher, or flash them at offset `0x0`:
 
 ```bash
-git clone https://github.com/d4rkmen/M5Gemini.git
-cd M5Gemini
+esptool --chip esp32s3 -p [Your-Serial-Port] write_flash 0x0 CARDPUTER_AI.bin
 ```
 
-### 2. Configuration
+A full flash resets the saved settings.
 
-Configuration settings (WiFi credentials, API keys) are compatible with M5Apps.
+## Setup
 
-- **Configuration Methods:**
+The assistant needs a WiFi network and a Gemini API key.
 
-  1.  **Manual Configuration on Device:**
-      - Press `ESC` to enter Settings menu
-      - Navigate using arrow keys and Enter to select
-      - Configure WiFi, API key, model, voice, and other settings
-      - Settings are automatically saved to NVS storage and persist across reinstalls
-  2.  **Import Configuration File:** - Create a `settings.txt` file with your configuration - Example `settings.txt`:
+- **Web setup** (both devices): `Settings` → `Web setup`. With no WiFi yet, the device starts its own access point with a one-off password and shows a QR code to join it; a second QR code opens the page (`http://192.168.4.1/`). When already connected, the page is served on the current network at the address shown on screen. It has no password and is only reachable while the Web setup screen is open.
+- **On the device** (Cardputer): press `ESC` on the start screen for the settings menu, move with the arrow keys and `ENTER`.
+- **From a file** (Cardputer): put a `settings.txt` in the `M5Gemini` folder of the SD card and choose `Settings` → `SD card` → `Import`. `Export` writes the current settings to the same file.
 
-  ```ini
-    wifi-enabled=true
-    wifi-ssid=YOUR_WIFI_SSID
-    wifi-pass=YOUR_WIFI_PASS
-    wifi-static_ip=false
-    wifi-ip=192.168.88.101
-    wifi-mask=255.255.255.0
-    wifi-gw=192.168.1.1
-    wifi-dns=8.8.8.8
-    system-brightness=100
-    system-volume=70
-    system-boot_sound=true
-    gemini-api_key=YOUR_GEMINI_API_KEY
-    gemini-model=gemini-2.0-flash-live-001
-    gemini-voice=Kore
-    gemini-volume=255
-    gemini-rules=you are conversational AI assistant running on M5 CardPuter. give short direct and a quite funny answer.
-  ```
-
-  - Copy file to SD card root as `/sdcard/settings.txt`
-  - In Settings menu select: `SD card` → `Import`
-
-### 3. Build the Project
-
-```bash
-idf.py build
+```ini
+wifi-enabled=true
+wifi-ssid=YOUR_WIFI_SSID
+wifi-pass=YOUR_WIFI_PASS
+gemini-api_key=YOUR_GEMINI_API_KEY
+gemini-model=gemini-3.1-flash-live-preview
+gemini-voice=Kore
 ```
 
-### 4. Flash onto M5Cardputer
+Settings are stored in NVS and survive an update that only replaces the application.
 
-Connect your M5 Cardputer via USB and run:
+## Using it
+
+### Cardputer
+
+- Start screen: the arrow keys choose `Live` (voice) or `Text` (typing), `ENTER` starts, `ESC` opens the settings.
+- With chat memory on, starting shows the saved chats: open one, start a new one, `DEL` forgets one, `TAB` opens it in the viewer.
+- In a chat:
+  - `ENTER`: send what you said so far, or skip the reply being spoken
+  - `TAB`: switch between voice and typing
+  - Arrow keys: scroll
+  - `ESC`: stop and go back
+- In typing mode the microphone is off, `ENTER` opens a box to type a message, and the reply is shown as text without being spoken. The session is still an audio session, because the Live models only answer in audio: the replies you do not hear are generated and billed as audio.
+- Chat viewer: `ENTER` on a message offers Edit, Delete and Delete from here on.
+- `Settings` → `Sleep`: sleep now, or set `Auto sleep`. `G0` wakes the Cardputer; it restarts.
+
+### StickS3
+
+`A` is the front button, `B` is the side button.
+
+| Press | Action |
+|---|---|
+| `A` | OK / start a session / send or skip |
+| `B` | Move down / scroll |
+| Hold `A` | Move up |
+| Hold `B` | Back / open settings / stop the session |
+
+- There is no keyboard: text settings are entered in Web setup. Numbers are picked from a list of steps on the device; exact values can be entered in Web setup.
+- `Settings` → `Power off`: power off now, or set `Auto power off`.
+- There is no SD card, so no chat memory and no settings import or export.
+
+## Build from source
+
+Requires ESP-IDF v5.5.
 
 ```bash
-idf.py -p [Your-Serial-Port] flash monitor
+git clone https://github.com/AndryTheBeast/CARDSTICK-AI.git
+cd CARDSTICK-AI
 ```
 
-(Replace `[Your-Serial-Port]` with the correct port, e.g., `COM3` on Windows or `/dev/ttyUSB0` on Linux).
-
-## Usage
-
-- From the start screen press `ESC` to enter Settings or `ENTER` to start a session. On the Cardputer the arrow keys choose between `Live` (voice) and `Text` (typing) first.
-- During a session the keyboard is used for control:
-  - `ENTER` — interrupt (skip playback or send during listening)
-  - `ESC` — stop session and return to start screen
-  - Arrow keys — scroll chat history
-  - `TAB` — switch between voice and typing. In typing mode the microphone is off, `ENTER` opens a box to type a message, and the reply is shown as text without being spoken. The session is still an audio session, so the unheard replies are generated and billed as audio.
-- `Settings` → `Web setup` edits the settings from a phone or PC browser, as on the StickS3 (see below). On the Cardputer `ENTER` switches the QR code and `DEL` leaves.
-- `Settings` → `Sleep` puts the Cardputer into deep sleep; press `G0` to wake it. It restarts when woken.
-
-[![YouTube video](https://img.youtube.com/vi/NF_7Dyx2gLY/0.jpg)](https://www.youtube.com/watch?v=NF_7Dyx2gLY)
-
-[![S2S Demo](https://img.youtube.com/vi/3MHIc3bUb94/0.jpg)](https://youtube.com/shorts/3MHIc3bUb94?si=4pxLwXzcZXVly9VV)
-
-## M5StickS3
-
-This fork also runs on the M5StickS3 (ESP32-S3-PICO-1, ES8311 codec, M5PM1 power chip, two buttons).
-
-### Build and flash
-
-The StickS3 has its own configuration file; the default `sdkconfig` stays the Cardputer one.
+Each board has its own configuration file and build directory:
 
 ```bash
-idf.py -B build_sticks3 -D SDKCONFIG=sdkconfig.sticks3 build
-idf.py -B build_sticks3 -D SDKCONFIG=sdkconfig.sticks3 -p [Your-Serial-Port] flash
+# Cardputer
+idf.py -B build_cardputer -D SDKCONFIG=sdkconfig build
+idf.py -B build_cardputer -D SDKCONFIG=sdkconfig -p [Your-Serial-Port] flash
+
+# StickS3
+idf.py -B build -D SDKCONFIG=sdkconfig.sticks3 build
+idf.py -B build -D SDKCONFIG=sdkconfig.sticks3 -p [Your-Serial-Port] flash
 ```
 
 Use `app-flash` instead of `flash` for later updates: `flash` also rewrites the settings partition and clears the saved WiFi networks and API key.
 
-If the stick was put into download mode by hand (long press on the side button), single-click the side button after flashing to start the firmware.
+These commands write the project's own partition layout. On a device that runs M5Launcher, install the release image through the Launcher instead, or the Launcher is overwritten.
 
-### Buttons
+If the StickS3 was put into download mode by hand (long press on the side button), single-click the side button after flashing to start the firmware.
 
-`A` is the front button, `B` is the side button.
+## Credits
 
-| Press    | Action                             |
-| -------- | ---------------------------------- |
-| `A`      | OK / start session / interrupt     |
-| `B`      | Move down / scroll                 |
-| Hold `A` | Move up                            |
-| Hold `B` | Back / open settings / stop session |
+- **d4rkmen** wrote [M5Gemini](https://github.com/d4rkmen/M5Gemini), the Cardputer assistant this project is built on. The application structure, the hardware layer, the settings system and the first Gemini Live client are his work.
+- **AndryTheBeast** directed and tested everything added since: the StickS3 port, Web setup, typed chat, chat memory, the LED effects, the power features and the audio and connection fixes.
+- **Claude** (Anthropic) wrote that code with him, working from his testing on the real devices.
 
-### Web setup
-
-There is no keyboard, so text settings are edited from a browser: `Settings` → `Web setup`.
-
-- Not connected to WiFi yet: the stick starts its own access point with a one-off password and shows a QR code to join it. Press `A` to switch the QR code to the page address (`http://192.168.4.1/`).
-- Already connected: the page is served on the current network at the address shown on screen. It has no password, and is only reachable while the Web setup screen is open.
-
-Hold `B` to leave; WiFi restarts with the saved settings.
-
-Up to 8 WiFi networks can be saved. With more than one, the stick scans and joins the strongest saved network in range, and looks for another when the current one keeps failing.
-
-### Differences from the Cardputer
-
-- No SD card: settings import/export and screenshots are not available.
-- Numbers are picked from a list of steps on the device; exact values can be entered in Web setup.
-- A battery indicator is shown on the main screen (on the Cardputer too).
-- `Settings` → `Power off` switches the device off through the power chip.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit pull requests or open issues.
+Libraries and services: Google Gemini Live API, ESP-IDF, LovyanGFX, mjson.
 
 ## License
 
-This project is licensed under the GNU General Public License
-
-## Acknowledgements
-
-- Google AI (Gemini Live API)
-- M5Stack (M5Unified library)
-- LovyanGFX (Display)
-- mjson (Embedded JSON parser)
+GNU General Public License. M5Gemini is published under the GNU General Public License without naming a version; this project is distributed under version 3, see [LICENSE](LICENSE).
