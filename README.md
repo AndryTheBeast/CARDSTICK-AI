@@ -35,7 +35,9 @@ StickS3 only
 
 ## Demo
 
-[![Watch the CARDSTICK AI demo on YouTube](https://img.youtube.com/vi/Szi4vtnftEg/0.jpg)](https://youtu.be/Szi4vtnftEg)
+
+https://github.com/user-attachments/assets/afd3d05a-d222-4855-988b-7f63d607de4f
+
 
 ## Screens
 
