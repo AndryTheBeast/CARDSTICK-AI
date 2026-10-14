@@ -33,6 +33,10 @@ StickS3 only
 - Two-button navigation.
 - Power off through the power chip.
 
+## Demo
+
+[![Watch the CARDSTICK AI demo on YouTube](https://img.youtube.com/vi/Szi4vtnftEg/0.jpg)](https://youtu.be/Szi4vtnftEg)
+
 ## Screens
 
 | | |
