@@ -4,7 +4,7 @@ CARDSTICK AI is a voice and text assistant for the M5Stack Cardputer and the M5S
 
 On the device it is called **CARDPUTER AI** on the Cardputer and **STICK AI** on the StickS3.
 
-![CARDPUTER AI on a Cardputer ADV and STICK AI on an M5StickS3, both on the start screen](docs/images/home-both.jpg)
+![CARDPUTER AI on a Cardputer ADV and STICK AI on an M5StickS3, both on the start screen](images/home-both.jpg)
 
 It started as a fork of [M5Gemini](https://github.com/d4rkmen/M5Gemini) by d4rkmen and grew into its own project. See [Credits](#credits).
 
@@ -37,11 +37,11 @@ StickS3 only
 
 | | |
 |---|---|
-| ![The same conversation on both devices](docs/images/chat-both.jpg) | ![A voice chat on the Cardputer](docs/images/chat-cardputer.jpg) |
+| ![The same conversation on both devices](images/chat-both.jpg) | ![A voice chat on the Cardputer](images/chat-cardputer.jpg) |
 | A voice chat on both devices | The chat screen on the Cardputer |
-| ![The list of saved chats on the Cardputer](docs/images/chat-list.jpg) | ![The settings menu on both devices](docs/images/settings-both.jpg) |
+| ![The list of saved chats on the Cardputer](images/chat-list.jpg) | ![The settings menu on both devices](images/settings-both.jpg) |
 | Saved chats on the Cardputer: open, view or forget | The settings menu on both devices |
-| ![The first settings on the Cardputer](docs/images/settings-cardputer.jpg) | ![The rest of the settings on the Cardputer](docs/images/settings-cardputer-2.jpg) |
+| ![The first settings on the Cardputer](images/settings-cardputer.jpg) | ![The rest of the settings on the Cardputer](images/settings-cardputer-2.jpg) |
 | Cardputer settings | Web setup, SD card and Sleep |
 
 ## Hardware
