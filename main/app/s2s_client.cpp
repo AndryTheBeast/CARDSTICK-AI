@@ -57,6 +57,8 @@ static const char JSON_STREAM_END[] = "{\"realtimeInput\":{\"audioStreamEnd\":tr
 // ─── Static buffers (BSS, not heap — avoids malloc fragmentation) ───
 static int16_t s_rec_buf[MIC_REC_BLOCKS][MIC_BUF_SAMPLES];
 static uint8_t s_pcm_buf[PCM_SEND_BYTES];
+// the server has announced that it will close the connection (goAway)
+static volatile bool s_go_away = false;
 static char s_json_buf[JSON_BUF_SIZE];
 static char s_msg_buf[MSG_BUF_CAPACITY];
 static uint8_t s_dec_buf[AUDIO_DECODE_CHUNK];
@@ -481,8 +483,11 @@ static void s2s_process_message(s2s_context_t* ctx)
     // ── Go away ──
     if (mjson_find(buf, len, "$.goAway", &tp, &tl) != MJSON_TOK_INVALID)
     {
-        ESP_LOGW(TAG, "Server sent goAway, will reconnect");
-        xEventGroupSetBits(ctx->event_group, S2S_ERROR_BIT);
+        // Not at once: the notice comes ahead of the server closing the connection,
+        // and reconnecting on the spot cut off a reply nine seconds in. The session
+        // task reconnects the next time it is listening.
+        ESP_LOGW(TAG, "Server sent goAway, will reconnect after this turn");
+        s_go_away = true;
         return;
     }
 
@@ -740,6 +745,7 @@ static void s2s_client_task(void* parameter)
     }
 #endif
 
+    s_go_away = false;
     ESP_LOGI(TAG, "Session ready, entering main loop");
 
     // ═══ Main conversation loop ═══
@@ -792,6 +798,13 @@ static void s2s_client_task(void* parameter)
 
         while (true)
         {
+            if (s_go_away)
+            {
+                // between turns: the reconnect the server asked for costs no reply
+                s_go_away = false;
+                ESP_LOGW(TAG, "Reconnecting as the server asked");
+                xEventGroupSetBits(ctx->event_group, S2S_ERROR_BIT);
+            }
             bits = xEventGroupGetBits(ctx->event_group);
             if (bits & (S2S_STOP_REQUEST_BIT | S2S_ERROR_BIT | S2S_MODEL_SPEAKING_BIT | S2S_USER_INTERRUPT_BIT))
                 break;
