@@ -13,6 +13,10 @@
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_random.h"
+#ifdef CONFIG_BOARD_TDECK
+#include "nvs.h"
+#include <string.h>
+#endif
 #include <algorithm>
 #include <string>
 #include <utility>
@@ -504,6 +508,39 @@ namespace
             hal->wifi()->connect();
     }
 
+#ifdef CONFIG_BOARD_TDECK
+    // Access point password, so the API key and WiFi passwords are not sent over an open
+    // network. Made once and kept: the network name never changes, and Windows silently
+    // reuses the password of the first join, so a new one on every start never connects.
+    // T-Deck only for now, so the Cardputer and StickS3 builds stay as released.
+    std::string ap_password(HAL::Hal* hal)
+    {
+        static const char* NVS_NAMESPACE = "websetup";
+        static const char* NVS_KEY = "ap_pass";
+        char pass[16] = {0};
+
+        const char* partition = hal->settings()->nvsPartition();
+        nvs_handle_t nvs;
+        if (partition && nvs_open_from_partition(partition, NVS_NAMESPACE, NVS_READWRITE, &nvs) == ESP_OK)
+        {
+            size_t len = sizeof(pass);
+            if (nvs_get_str(nvs, NVS_KEY, pass, &len) != ESP_OK || strlen(pass) != 8)
+            {
+                snprintf(pass, sizeof(pass), "%08lu", (unsigned long)(esp_random() % 100000000UL));
+                if (nvs_set_str(nvs, NVS_KEY, pass) != ESP_OK || nvs_commit(nvs) != ESP_OK)
+                    ESP_LOGW(TAG, "access point password not saved, it changes next time");
+            }
+            nvs_close(nvs);
+        }
+        else
+        {
+            snprintf(pass, sizeof(pass), "%08lu", (unsigned long)(esp_random() % 100000000UL));
+            ESP_LOGW(TAG, "settings storage not open, access point password changes next time");
+        }
+        return pass;
+    }
+#endif
+
     struct Screen_t
     {
         bool use_ap;
@@ -602,9 +639,13 @@ namespace UTILS
                 char buf[24];
                 snprintf(buf, sizeof(buf), "M5Gemini-%02X%02X", mac[4], mac[5]);
                 screen.ap_ssid = buf;
+#ifdef CONFIG_BOARD_TDECK
+                screen.ap_pass = ap_password(hal);
+#else
                 // one-off password, so the API key and WiFi passwords are not sent over an open network
                 snprintf(buf, sizeof(buf), "%08lu", (unsigned long)(esp_random() % 100000000UL));
                 screen.ap_pass = buf;
+#endif
 
                 if (!hal->wifi()->start_ap(screen.ap_ssid, screen.ap_pass))
                 {

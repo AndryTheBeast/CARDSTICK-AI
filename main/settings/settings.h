@@ -192,6 +192,11 @@ namespace SETTINGS
          */
         bool importFromFile(const std::string& filename);
 
+#ifdef CONFIG_BOARD_TDECK
+        // NVS partition the settings live in, for values kept outside the settings menus
+        const char* nvsPartition() const { return _active_partition; }
+#endif
+
     private:
         static const char* const NVS_PARTITIONS[];
         const char* _active_partition = nullptr;
