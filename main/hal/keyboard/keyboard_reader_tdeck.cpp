@@ -25,6 +25,7 @@ static constexpr Point2D_t KEY_POS_ENTER = {13, 2};
 static constexpr Point2D_t KEY_POS_DEL = {13, 0};
 static constexpr Point2D_t KEY_POS_SPACE = {13, 3};
 static constexpr Point2D_t KEY_POS_SHIFT = {1, 2};
+static constexpr Point2D_t KEY_POS_FN = {0, 2};
 static constexpr Point2D_t KEY_POS_ESC = {0, 0};
 static constexpr Point2D_t KEY_POS_TAB = {0, 1};
 
@@ -167,7 +168,7 @@ void TDeckKeyboardReader::_read_trackball()
             continue;
         s_ball_steps[dir] = 0;
         while (steps--)
-            _queue({dir_keys[dir], false});
+            _queue({dir_keys[dir], false, true});
     }
 }
 
@@ -197,6 +198,8 @@ void TDeckKeyboardReader::update()
     }
     if (_current.key.x >= 0)
     {
+        if (_current.fn)
+            _key_list.push_back(KEY_POS_FN);
         if (_current.shift)
             _key_list.push_back(KEY_POS_SHIFT);
         _key_list.push_back(_current.key);

@@ -3,6 +3,7 @@
 #include "esp_log.h"
 #include "esp_system.h"
 #include "app/utils/ui/dialog.h"
+#include "app/utils/ui/key_labels.h"
 #include "app/utils/ui/settings_screen.h"
 #include "app/utils/ui/settings_submenu.h"
 #include "app/utils/ui/key_repeat.h"
@@ -36,10 +37,14 @@ static const char* GEMINI_NS = "gemini";
 static const char* HINT_MAIN = "[A] START [B hold] SETTINGS";
 static const char* API_KEY_HINT = "[A] [B hold]";
 static const char* HOME_TITLE = "STICK AI";
+#elif defined(CONFIG_BOARD_TDECK)
+static const char* HOME_TITLE = "T-DECK AI";
+static const char* HINT_MAIN = "[\u2190][\u2192][\u2193] [ENTER] START " KEY_LABEL_ESC " SETTINGS";
+static const char* API_KEY_HINT = "[ENTER] " KEY_LABEL_ESC;
 #else
 static const char* HOME_TITLE = "CARDPUTER AI";
-static const char* HINT_MAIN = "[\u2190][\u2192] [ENTER] START [ESC] SETTINGS";
-static const char* API_KEY_HINT = "[ENTER] [ESC]";
+static const char* HINT_MAIN = "[\u2190][\u2192] [ENTER] START " KEY_LABEL_ESC " SETTINGS";
+static const char* API_KEY_HINT = "[ENTER] " KEY_LABEL_ESC;
 #endif
 
 static bool is_repeat = false;
@@ -527,16 +532,17 @@ const char* GeminiApp::getHintForState() const
     {
     case APP_STATE_S2S_LISTENING:
 #if S2S_TEXT_INPUT
-        return _textMode ? "[ENTER] TYPE [TAB] VOICE [ESC] STOP" : "[ENTER] SEND [TAB] TYPE [ESC] STOP";
+        return _textMode ? "[ENTER] TYPE " KEY_LABEL_TAB " VOICE " KEY_LABEL_ESC " STOP"
+                         : "[ENTER] SEND " KEY_LABEL_TAB " TYPE " KEY_LABEL_ESC " STOP";
 #endif
-        return "[ENTER] SEND [\u2191][\u2193] SCROLL [ESC] STOP";
+        return "[ENTER] SEND [\u2191][\u2193] SCROLL " KEY_LABEL_ESC " STOP";
     case APP_STATE_S2S_SPEAKING:
-        return "[ENTER] SKIP [\u2191][\u2193] SCROLL [ESC] STOP";
+        return "[ENTER] SKIP [\u2191][\u2193] SCROLL " KEY_LABEL_ESC " STOP";
     case APP_STATE_S2S_CONNECTING:
     case APP_STATE_S2S_ERROR:
-        return "[ESC] CANCEL";
+        return KEY_LABEL_ESC " CANCEL";
     default:
-        return "[\u2191][\u2193][\u2190][\u2192] SCROLL [ESC] BACK";
+        return "[\u2191][\u2193][\u2190][\u2192] SCROLL " KEY_LABEL_ESC " BACK";
     }
 }
 

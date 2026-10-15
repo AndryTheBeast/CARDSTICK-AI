@@ -7,6 +7,7 @@
 #include "hal_config.h"
 #if HAL_USE_WIFI && HAL_USE_KEYBOARD && HAL_USE_DISPLAY
 #include "../ui/dialog.h"
+#include "../ui/key_labels.h"
 #include "../theme/theme_define.h"
 #include "common_define.h"
 #include "esp_http_server.h"
@@ -550,24 +551,42 @@ namespace
         std::string host;
     };
 
+#ifdef CONFIG_BOARD_TDECK
+// 320x240: a QR code nearly the screen's height, centred above the hint line, and the
+// text beside it in the larger font (8 px a character, so 14 fit)
+#define WS_QR_SIZE 184
+#define WS_QR_MARGIN 6
+#define WS_QR_Y 16
+#define WS_TEXT_Y 30
+#define WS_LINE_HEIGHT 20
+#define WS_FONT FONT_16
+#else
+#define WS_QR_SIZE 112
+#define WS_QR_MARGIN 4
+#define WS_QR_Y 0
+#define WS_TEXT_Y 2
+#define WS_LINE_HEIGHT 16
+#define WS_FONT FONT_14
+#endif
+
     void draw_screen(HAL::Hal* hal, const Screen_t& screen, bool show_url_qr)
     {
         auto* canvas = hal->canvas();
-        const int qr_size = 112;
-        const int qr_margin = 4;
+        const int qr_size = WS_QR_SIZE;
+        const int qr_margin = WS_QR_MARGIN;
         const int text_x = qr_size + qr_margin * 2 + 5;
-        const int line_height = 16;
+        const int line_height = WS_LINE_HEIGHT;
 
         canvas->fillScreen(THEME_COLOR_BG);
 
         const bool wifi_qr = screen.use_ap && !show_url_qr;
         const std::string qr_text =
             wifi_qr ? "WIFI:T:WPA;S:" + screen.ap_ssid + ";P:" + screen.ap_pass + ";;" : screen.url;
-        canvas->fillRect(0, 0, qr_size + qr_margin * 2, qr_size + qr_margin * 2, TFT_WHITE);
-        canvas->qrcode(qr_text.c_str(), qr_margin, qr_margin, qr_size);
+        canvas->fillRect(0, WS_QR_Y, qr_size + qr_margin * 2, qr_size + qr_margin * 2, TFT_WHITE);
+        canvas->qrcode(qr_text.c_str(), qr_margin, WS_QR_Y + qr_margin, qr_size);
 
-        int y = 2;
-        canvas->setFont(FONT_14);
+        int y = WS_TEXT_Y;
+        canvas->setFont(WS_FONT);
         canvas->setTextColor(THEME_COLOR_TITLE);
         canvas->drawString("Web setup", text_x, y);
         y += line_height + 4;

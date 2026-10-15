@@ -11,6 +11,7 @@
 #if HAL_USE_LED
 #include "settings_submenu.h"
 #include "settings_screen.h"
+#include "key_labels.h"
 #include "../theme/theme_define.h"
 #include "draw_helper.h"
 #include "key_repeat.h"
@@ -20,7 +21,7 @@
 #define HINT_HEIGHT 12
 #define ITEMS_Y_OFFSET 20
 
-static const char* HINT_ITEMS = "[\xE2\x86\x91][\xE2\x86\x93] [ESC] [ENTER]";
+static const char* HINT_ITEMS = "[\xE2\x86\x91][\xE2\x86\x93] " KEY_LABEL_ESC " [ENTER]";
 
 namespace UTILS
 {

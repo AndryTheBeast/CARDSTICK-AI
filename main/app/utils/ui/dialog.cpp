@@ -5,6 +5,7 @@
 #include "lgfx/v1/misc/enum.hpp"
 #include "app/utils/text/text_utils.h"
 #include "key_repeat.h"
+#include "key_labels.h"
 #include "draw_helper.h"
 
 static const char* TAG = "DIALOG";
@@ -559,7 +560,7 @@ namespace UTILS
                 auto keys_state = hal->keyboard()->keysState();
                 // Draw controls hint
                 hl_text_render(&hint_ctx,
-                               keys_state.fn ? "[DEL]" : "[\u2191][\u2193][\u2190][\u2192] [DEL] [ESC] [ENTER]",
+                               keys_state.fn ? "[DEL]" : "[\u2191][\u2193][\u2190][\u2192] [DEL] " KEY_LABEL_ESC " [ENTER]",
                                box_x,
                                hal->canvas()->height() - 12,
                                TFT_DARKGREY,
@@ -578,7 +579,12 @@ namespace UTILS
                 // Handle input
                 if (hal->keyboard()->isPressed())
                 {
+#ifdef CONFIG_BOARD_TDECK
+                    // the trackball's arrows come with Fn: only Fn+DEL is the Fn command here
+                    if (keys_state.fn && hal->keyboard()->isKeyPressing(KEY_NUM_BACKSPACE))
+#else
                     if (keys_state.fn)
+#endif
                     {
                         if (hal->keyboard()->isKeyPressing(KEY_NUM_BACKSPACE))
                         {
@@ -867,8 +873,13 @@ namespace UTILS
                 // else
                 {
                     hl_text_render(&hint_ctx,
+#ifdef CONFIG_BOARD_TDECK
+                                   // no Fn or Opt key: the trackball moves the cursor
+                                   "[\u2191][\u2193][\u2190][\u2192] [DEL] " KEY_LABEL_ESC " [ENTER]",
+#else
                                    keys_state.fn ? "[\u2191][\u2193][\u2190][\u2192] [DEL]"
                                                  : "[Aa] [Fn] [OPT] [DEL] [ESC] [ENTER]",
+#endif
                                    box_x,
                                    hal->canvas()->height() - 9,
                                    TFT_DARKGREY,
@@ -1149,7 +1160,7 @@ namespace UTILS
 #ifdef CONFIG_BOARD_STICKS3
                                               "[A] OK [B] DOWN [A hold] UP [B hold] BACK",
 #else
-                                              "[\u2191][\u2193][\u2190][\u2192] [DEL] [ESC] [ENTER]",
+                                              "[\u2191][\u2193][\u2190][\u2192] [DEL] " KEY_LABEL_ESC " [ENTER]",
 #endif
                                               5,
                                               hal->canvas()->height() - 9,

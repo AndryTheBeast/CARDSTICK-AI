@@ -56,6 +56,9 @@ namespace KEYBOARD
         {
             Point2D_t key;
             bool shift;
+            // trackball moves come with Fn: the arrows share their positions with ; . , /
+            // and the text editor tells them apart by Fn, as on the Cardputer
+            bool fn = false;
         };
 
         void _read_keyboard();
@@ -68,7 +71,7 @@ namespace KEYBOARD
         uint32_t _next_poll = 0;
 
         std::deque<Pulse_t> _queue_keys;
-        Pulse_t _current = {{-1, -1}, false};
+        Pulse_t _current = {{-1, -1}, false, false};
         uint32_t _current_until = 0;
         uint32_t _gap_until = 0;
 

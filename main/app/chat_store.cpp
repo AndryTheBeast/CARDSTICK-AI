@@ -19,6 +19,7 @@
 #if HAL_USE_SDCARD
 #include "chat_store.h"
 #include "app/utils/ui/dialog.h"
+#include "app/utils/ui/key_labels.h"
 #include "app/utils/ui/draw_helper.h"
 #include "app/utils/ui/key_repeat.h"
 #include "app/utils/theme/theme_define.h"
@@ -75,10 +76,10 @@ static const char* CHATS_DIR = "0:/M5Gemini/chats";
 #define VIEW_EDIT_ROOM 300
 #define VIEW_EDIT_MIN 500
 
-static const char* HINT_PICK = "[ENTER] OPEN [TAB] VIEW [DEL] FORGET [ESC]";
-static const char* HINT_VIEW = "[\xE2\x86\x91][\xE2\x86\x93] [ENTER] VIEW [DEL] FORGET [ESC]";
-static const char* HINT_FORGET = "[\xE2\x86\x91][\xE2\x86\x93] [ENTER] FORGET [ESC] BACK";
-static const char* HINT_CHAT = "[\xE2\x86\x91][\xE2\x86\x93] [\xE2\x86\x90][\xE2\x86\x92] TURN [ENTER] EDIT [ESC]";
+static const char* HINT_PICK = "[ENTER] OPEN " KEY_LABEL_TAB " VIEW [DEL] FORGET " KEY_LABEL_ESC;
+static const char* HINT_VIEW = "[\xE2\x86\x91][\xE2\x86\x93] [ENTER] VIEW [DEL] FORGET " KEY_LABEL_ESC;
+static const char* HINT_FORGET = "[\xE2\x86\x91][\xE2\x86\x93] [ENTER] FORGET " KEY_LABEL_ESC " BACK";
+static const char* HINT_CHAT = "[\xE2\x86\x91][\xE2\x86\x93] [\xE2\x86\x90][\xE2\x86\x92] TURN [ENTER] EDIT " KEY_LABEL_ESC;
 
 namespace CHAT_STORE
 {

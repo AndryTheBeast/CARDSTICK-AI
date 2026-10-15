@@ -9,13 +9,14 @@
 #include "dialog.h"
 #include "draw_helper.h"
 #include "key_repeat.h"
+#include "key_labels.h"
 #include "common_define.h"
 
 static const char* TAG = "SETTINGS_SCREEN";
 #ifdef CONFIG_BOARD_STICKS3
 static const char* HINT_ITEMS = "[A] OK [B] DOWN [A hold] UP [B hold] BACK";
 #else
-static const char* HINT_ITEMS = "[\xE2\x86\x91][\xE2\x86\x93][\xE2\x86\x90][\xE2\x86\x92] [ESC] [ENTER]";
+static const char* HINT_ITEMS = "[\xE2\x86\x91][\xE2\x86\x93][\xE2\x86\x90][\xE2\x86\x92] " KEY_LABEL_ESC " [ENTER]";
 #endif
 static const char* HINT_GROUPS = HINT_ITEMS;
 
