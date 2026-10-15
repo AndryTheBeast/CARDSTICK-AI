@@ -83,6 +83,11 @@ void HalTDeck::init()
 #if HAL_USE_BUTTON
     _homeButton = new Button(TDECK_HOME_BUTTON_GPIO);
 #endif
+#if HAL_USE_SDCARD
+    // mounted on demand; its CS was set high in _init_power
+    ESP_LOGI(TAG, "init sdcard");
+    _sdcard = new SDCard;
+#endif
 #if HAL_USE_WIFI
     ESP_LOGI(TAG, "init wifi");
     _wifi = new WiFi(_settings);

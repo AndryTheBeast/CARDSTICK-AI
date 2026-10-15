@@ -43,11 +43,19 @@ static const char* DRIVE = "0:";
 static const char* APP_DIR = "0:/M5Gemini";
 static const char* CHATS_DIR = "0:/M5Gemini/chats";
 
+#ifdef CONFIG_BOARD_TDECK
+// the T-Deck's SD card shares the display's SPI bus, already set up by then, as in hal/sdcard
+#define PIN_NUM_MISO 38
+#define PIN_NUM_MOSI 41
+#define PIN_NUM_CLK 40
+#define PIN_NUM_CS GPIO_NUM_39
+#else
 // the SD card slot of the Cardputer, as in hal/sdcard
 #define PIN_NUM_MISO 39
 #define PIN_NUM_MOSI 14
 #define PIN_NUM_CLK 40
 #define PIN_NUM_CS GPIO_NUM_12
+#endif
 
 #define MAX_CHAT_ID 9999
 #define MAX_LISTED_CHATS 200
@@ -100,7 +108,12 @@ namespace CHAT_STORE
         bus.data6_io_num = -1;
         bus.data7_io_num = -1;
         bus.max_transfer_sz = 4092;
+#ifdef CONFIG_BOARD_TDECK
+        // the display has set the bus up already; asking again only logs an error
+        esp_err_t err = ESP_ERR_INVALID_STATE;
+#else
         esp_err_t err = spi_bus_initialize((spi_host_device_t)host.slot, &bus, SDSPI_DEFAULT_DMA);
+#endif
         if (err != ESP_OK && err != ESP_ERR_INVALID_STATE)
             return false;
         s_bus_owned = err == ESP_OK;

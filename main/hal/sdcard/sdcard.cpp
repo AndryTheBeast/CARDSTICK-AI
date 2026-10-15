@@ -8,6 +8,7 @@
  * @copyright Copyright (c) 2024
  *
  */
+#include "sdkconfig.h"
 #include <string.h>
 #include <sys/unistd.h>
 #include <sys/stat.h>
@@ -19,10 +20,18 @@
 #include "sdcard.h"
 #include "common_define.h"
 
+#ifdef CONFIG_BOARD_TDECK
+// on the display's SPI bus, which the display has set up by the time the card is mounted
+#define PIN_NUM_MISO 38
+#define PIN_NUM_MOSI 41
+#define PIN_NUM_CLK 40
+#define PIN_NUM_CS GPIO_NUM_39
+#else
 #define PIN_NUM_MISO 39
 #define PIN_NUM_MOSI 14
 #define PIN_NUM_CLK 40
 #define PIN_NUM_CS GPIO_NUM_12
+#endif
 
 static const char* MOUNT_POINT = "/sdcard";
 static const char* TAG = "SDCARD";
@@ -47,7 +56,12 @@ bool SDCard::mount(bool format_if_mount_failed)
     bus_cfg.flags = (SPICOMMON_BUSFLAG_SCLK | SPICOMMON_BUSFLAG_MOSI);
     bus_cfg.isr_cpu_id = ESP_INTR_CPU_AFFINITY_AUTO;
     bus_cfg.intr_flags = 0;
+#ifdef CONFIG_BOARD_TDECK
+    // the display has set the bus up already; asking again only logs an error
+    esp_err_t ret = ESP_ERR_INVALID_STATE;
+#else
     esp_err_t ret = spi_bus_initialize((spi_host_device_t)host.slot, &bus_cfg, SDSPI_DEFAULT_DMA);
+#endif
     if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE)
     {
         ESP_LOGE(TAG, "Failed to initialize SPI bus: %s", esp_err_to_name(ret));
