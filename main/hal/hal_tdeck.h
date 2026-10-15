@@ -6,6 +6,7 @@
 #include "hal.h"
 #include "common_define.h"
 #include "es7210/es7210.h"
+#include <functional>
 
 // ES7210 master clock, from the mic's I2S port
 #define TDECK_MIC_MCLK_GPIO 48
@@ -48,11 +49,20 @@ namespace HAL
 
         inline ES7210* es7210() { return _es7210; }
 
+        // Called with the click that answers a key press, for as long as it is set, as on
+        // the Cardputer: the message box flashes the keyboard light from it.
+        std::function<void()> on_key_sound;
+
 #if HAL_USE_SPEAKER
         void playErrorSound() override { _speaker->playWav(error_wav_start, error_wav_end - error_wav_start); }
         void playKeyboardSound() override { _speaker->tone(5000, 20); }
         void playLastSound() override { _speaker->tone(6000, 20); }
-        void playNextSound() override { _speaker->tone(7000, 20); }
+        void playNextSound() override
+        {
+            _speaker->tone(7000, 20);
+            if (on_key_sound)
+                on_key_sound();
+        }
         void playDeviceConnectedSound() override
         {
             _speaker->tone(1000, 100);

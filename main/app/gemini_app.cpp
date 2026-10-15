@@ -25,7 +25,11 @@
 #include "common_define.h"
 #include "wifi/wifi.h"
 #if S2S_TEXT_INPUT && HAL_USE_LED
+#ifdef CONFIG_BOARD_TDECK
+#include "hal_tdeck.h"
+#else
 #include "hal_cardputer.h"
+#endif
 #include "esp_random.h"
 #define LED_KEY_FLASH_MS 120
 static uint32_t led_color_by_name(const std::string& name);
@@ -216,7 +220,11 @@ void GeminiApp::typeMessage()
     // own loop, so this rides on the key click it asks the HAL for.
     auto* settings = _hal->settings();
     const std::string key_color = settings->getString("led", "k_typing");
+#ifdef CONFIG_BOARD_TDECK
+    auto* hal = static_cast<HAL::HalTDeck*>(_hal);
+#else
     auto* hal = static_cast<HAL::HalCardputer*>(_hal);
+#endif
     if (settings->getBool("led", "enabled") && key_color != "Off")
     {
         const uint32_t brightness = settings->getNumber("led", "brightness");
@@ -1050,6 +1058,11 @@ static const uint32_t LED_BREATHE_MS[] = {4000, 2500, 1500};
 // light. Names and values are the ones Bruce offers for this LED.
 static uint32_t led_color_by_name(const std::string& name)
 {
+#ifdef CONFIG_BOARD_TDECK
+    // the keyboard backlight has one colour: its menus offer On and Off
+    if (name == "On")
+        return 0xFFFFFF;
+#endif
     static const struct
     {
         const char* name;

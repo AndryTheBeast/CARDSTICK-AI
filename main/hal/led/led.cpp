@@ -6,6 +6,9 @@
  *
  */
 
+#include "sdkconfig.h"
+// the T-Deck has no RGB LED: led_tdeck.cpp drives its keyboard backlight instead
+#ifndef CONFIG_BOARD_TDECK
 #include "led.h"
 #include "esp_log.h"
 #include <cstring>
@@ -920,3 +923,4 @@ namespace HAL
     }
 
 } // namespace HAL
+#endif

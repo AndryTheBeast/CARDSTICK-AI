@@ -166,7 +166,53 @@ namespace SETTINGS
         };
 #endif
 
-#if HAL_USE_LED
+#if HAL_USE_LED && defined(CONFIG_BOARD_TDECK)
+        // The T-Deck's status light is its white keyboard backlight: a state is lit or
+        // not, with an effect, and the states are told apart by those.
+#define LED_LIGHT_CHOICES "Off;On"
+#define LED_EFFECT_CHOICES "Steady;Blink;Breathe"
+#define LED_SPEED_CHOICES "Slow;Normal;Fast"
+        SettingGroup_t led_group;
+        led_group.name = "Keyboard light";
+        led_group.nvs_namespace = "led";
+        led_group.items = {
+            back_item,
+            {"enabled", "Enabled", TYPE_BOOL, "true", "true", "", "", "Show the device state on the keyboard backlight"},
+            {"brightness", "Brightness", TYPE_NUMBER, "128", "128", "0", "255", "Keyboard light brightness (0-100%)", nullptr, true},
+            // one row per state: the app opens the group of the same name from it
+            {"", "Low battery", TYPE_CALLBACK, "", "", "", "", "Level, light and effect when the battery is low"},
+            {"", "No WiFi", TYPE_CALLBACK, "", "", "", "", "Light and effect when WiFi is not connected"},
+            {"", "WiFi on", TYPE_CALLBACK, "", "", "", "", "Light and effect when WiFi is connected"},
+            {"", "Listening", TYPE_CALLBACK, "", "", "", "", "Light and effect while you are speaking"},
+            {"", "Speaking", TYPE_CALLBACK, "", "", "", "", "Light and effect while Gemini is speaking"},
+            {"", "Typing", TYPE_CALLBACK, "", "", "", "", "Light and effect in text mode, and a flash on each key press"},
+        };
+
+        std::vector<SettingGroup_t> led_state_groups;
+        auto add_led_state = [&](const char* name, const std::string& key, const char* light, const char* effect, const char* speed, const std::string& when)
+        {
+            SettingGroup_t state_group;
+            state_group.name = name;
+            state_group.nvs_namespace = "led";
+            state_group.items = {
+                back_item,
+                {"c_" + key, "Light", TYPE_STRING, light, "", LED_LIGHT_CHOICES, "", "Keyboard light on or off " + when},
+                {"e_" + key, "Effect", TYPE_STRING, effect, "", LED_EFFECT_CHOICES, "", "Steady, blinking or breathing " + when},
+                {"s_" + key, "Speed", TYPE_STRING, speed, "", LED_SPEED_CHOICES, "", "How fast it blinks or breathes"},
+            };
+            led_state_groups.push_back(state_group);
+        };
+        add_led_state("Low battery", "lowbat", "On", "Blink", "Fast", "when the battery is low");
+        add_led_state("No WiFi", "offline", "On", "Blink", "Slow", "when WiFi is not connected");
+        add_led_state("WiFi on", "online", "Off", "Steady", "Normal", "when WiFi is connected");
+        add_led_state("Listening", "listen", "On", "Steady", "Normal", "while you are speaking");
+        add_led_state("Speaking", "speak", "On", "Breathe", "Normal", "while Gemini is speaking");
+        add_led_state("Typing", "typing", "On", "Steady", "Normal", "in text mode, while it waits for your message");
+        led_state_groups.back().items.push_back(
+            {"k_typing", "Key press", TYPE_STRING, "Off", "", LED_LIGHT_CHOICES, "", "Flash the keyboard light on each key press while you type a message"});
+        led_state_groups[0].items.insert(led_state_groups[0].items.begin() + 1,
+                                         {"low_bat", "Level %", TYPE_NUMBER, "15", "15", "0", "50", "Battery level (%) under which the light shows that the battery is low. 0 for never"});
+#elif HAL_USE_LED
 #define LED_COLOR_CHOICES "Off;Purple;White;Red;Orange;Yellow;Lime Green;Green;Cyan;Blue;Magenta;Pink"
 #define LED_EFFECT_CHOICES "Steady;Blink;Breathe"
 #define LED_SPEED_CHOICES "Slow;Normal;Fast"

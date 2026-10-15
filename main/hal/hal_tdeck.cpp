@@ -104,6 +104,12 @@ void HalTDeck::init()
     ESP_LOGI(TAG, "init sdcard");
     _sdcard = new SDCard;
 #endif
+#if HAL_USE_LED
+    // the keyboard backlight, on the keyboard controller set up above
+    ESP_LOGI(TAG, "init led");
+    _led = new LED();
+    _led->off();
+#endif
 #if HAL_USE_BAT
     ESP_LOGI(TAG, "init battery");
     _battery = new Battery();
@@ -162,6 +168,9 @@ void HalTDeck::powerOff()
 #endif
 #if HAL_USE_SPEAKER
     _speaker->end();
+#endif
+#if HAL_USE_LED
+    _led->off();
 #endif
 #if HAL_USE_DISPLAY
     _display->setBrightness(0);
