@@ -90,6 +90,10 @@ private:
     bool _textMode = false;
     // Mode picked on the start screen: false for a live (voice) session, true for text
     bool _startInText = false;
+#ifdef CONFIG_BOARD_TDECK
+    // the Settings card below the two mode cards is selected
+    bool _startOnSettings = false;
+#endif
     void setTextMode(bool enabled);
     void typeMessage();
 #endif

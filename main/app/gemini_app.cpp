@@ -800,8 +800,21 @@ static uint32_t icon_color(uint32_t rgb, uint8_t level);
 // Start screen cards: "Live" talks, "Text" types. Drawn rather than stored as bitmaps,
 // so that the unselected one can be dimmed and neither costs flash.
 #define CARD_W 102
+#ifdef CONFIG_BOARD_TDECK
+// 320x240: near-square cards, and the Settings card below them, centred under the title
+#define CARD_H 96
+#define CARD_Y 68
+// icon and label as one block, centred in the card
+#define CARD_ICON_Y 20
+#define CARD_LABEL_Y 65
+#define SETTINGS_CARD_Y (CARD_Y + CARD_H + 14)
+#define SETTINGS_CARD_H 38
+#else
 #define CARD_H 66
 #define CARD_Y 52
+#define CARD_ICON_Y 7
+#define CARD_LABEL_Y (CARD_H - 21)
+#endif
 #define CARD_GAP 12
 
 // microphone with sound waves on both sides, centred on cx, 32 px tall from y
@@ -843,13 +856,48 @@ static void draw_mode_card(LGFX_Sprite* c, int x, const char* label, bool text_i
     if (selected)
         c->drawRoundRect(x + 1, CARD_Y + 1, CARD_W - 2, CARD_H - 2, 7, border);
     if (text_icon)
-        draw_text_icon(c, x + CARD_W / 2, CARD_Y + 7, icon);
+        draw_text_icon(c, x + CARD_W / 2, CARD_Y + CARD_ICON_Y, icon);
     else
-        draw_live_icon(c, x + CARD_W / 2, CARD_Y + 7, icon);
+        draw_live_icon(c, x + CARD_W / 2, CARD_Y + CARD_ICON_Y, icon);
     c->setFont(FONT_16);
     c->setTextColor(selected ? TFT_WHITE : TFT_DARKGREY);
-    c->drawCenterString(label, x + CARD_W / 2, CARD_Y + CARD_H - 21);
+    c->drawCenterString(label, x + CARD_W / 2, CARD_Y + CARD_LABEL_Y);
 }
+
+#ifdef CONFIG_BOARD_TDECK
+// gear, centred on (cx, cy): eight teeth around a ring
+static void draw_settings_icon(LGFX_Sprite* c, int cx, int cy, uint32_t color)
+{
+    c->fillArc(cx, cy, 8, 4, 0, 360, color);
+    for (int a = 0; a < 360; a += 45)
+        c->fillArc(cx, cy, 11, 8, a - 12, a + 12, color);
+}
+
+// as wide as the two cards together, so the three line up
+static void draw_settings_card(LGFX_Sprite* c, int x, bool selected)
+{
+    const int w = CARD_W * 2 + CARD_GAP;
+    const uint32_t border = selected ? THEME_COLOR_TITLE : (uint32_t)0x3A3A3A;
+    const uint32_t fill = selected ? (uint32_t)0x10283C : (uint32_t)0x000000;
+    c->fillRoundRect(x, SETTINGS_CARD_Y, w, SETTINGS_CARD_H, 8, fill);
+    c->drawRoundRect(x, SETTINGS_CARD_Y, w, SETTINGS_CARD_H, 8, border);
+    if (selected)
+        c->drawRoundRect(x + 1, SETTINGS_CARD_Y + 1, w - 2, SETTINGS_CARD_H - 2, 7, border);
+
+    static const char* label = "Settings";
+    c->setFont(FONT_16);
+    const int icon_w = 22;
+    const int gap = 8;
+    const int content_w = icon_w + gap + c->textWidth(label);
+    const int left = x + (w - content_w) / 2;
+    const int cy = SETTINGS_CARD_Y + SETTINGS_CARD_H / 2;
+    draw_settings_icon(c, left + icon_w / 2, cy, icon_color(0x8AB4F8, selected ? 255 : 105));
+    c->setTextColor(selected ? TFT_WHITE : TFT_DARKGREY);
+    c->setTextDatum(middle_left);
+    c->drawString(label, left + icon_w + gap, cy);
+    c->setTextDatum(top_left);
+}
+#endif
 
 bool GeminiApp::drawMainScreen()
 {
@@ -869,8 +917,14 @@ bool GeminiApp::drawMainScreen()
     canvas->drawCenterString("v" BUILD_NUMBER, canvas->width() / 2, TEXT_PADDING + 20);
 
     const int left = (canvas->width() - CARD_W * 2 - CARD_GAP) / 2;
+#ifdef CONFIG_BOARD_TDECK
+    draw_mode_card(canvas, left, "Live", false, !_startOnSettings && !_startInText);
+    draw_mode_card(canvas, left + CARD_W + CARD_GAP, "Text", true, !_startOnSettings && _startInText);
+    draw_settings_card(canvas, left, _startOnSettings);
+#else
     draw_mode_card(canvas, left, "Live", false, !_startInText);
     draw_mode_card(canvas, left + CARD_W + CARD_GAP, "Text", true, _startInText);
+#endif
 
 #if HAL_USE_BAT
     drawBattery(4, 5, 22, 11, true);
@@ -1141,6 +1195,43 @@ void GeminiApp::handleMainScreenInput()
 {
     _hal->keyboard()->updateKeyList();
     _hal->keyboard()->updateKeysState();
+
+#ifdef CONFIG_BOARD_TDECK
+    // up and down move between the two mode cards and the Settings card below them
+    if (_hal->keyboard()->isKeyPressing(KEY_NUM_UP) || _hal->keyboard()->isKeyPressing(KEY_NUM_DOWN))
+    {
+        const uint8_t key = _hal->keyboard()->isKeyPressing(KEY_NUM_DOWN) ? KEY_NUM_DOWN : KEY_NUM_UP;
+        _hal->keyboard()->waitForRelease(key);
+        const bool want_settings = key == KEY_NUM_DOWN;
+        if (want_settings != _startOnSettings)
+        {
+            _startOnSettings = want_settings;
+            _hal->playNextSound();
+            is_rendered = false;
+        }
+        return;
+    }
+    if (_startOnSettings && (_hal->keyboard()->isKeyPressing(KEY_NUM_LEFT) || _hal->keyboard()->isKeyPressing(KEY_NUM_RIGHT)))
+    {
+        // back up to the card on that side
+        const uint8_t key = _hal->keyboard()->isKeyPressing(KEY_NUM_LEFT) ? KEY_NUM_LEFT : KEY_NUM_RIGHT;
+        _hal->keyboard()->waitForRelease(key);
+        _startOnSettings = false;
+        _startInText = key == KEY_NUM_RIGHT;
+        _hal->playNextSound();
+        is_rendered = false;
+        return;
+    }
+    if (_startOnSettings && _hal->keyboard()->isKeyPressing(KEY_NUM_ENTER))
+    {
+        _hal->keyboard()->waitForRelease(KEY_NUM_ENTER);
+        _hal->playNextSound();
+        _currentScreen = SCREEN_SETTINGS;
+        setState(APP_STATE_IDLE);
+        is_rendered = false;
+        return;
+    }
+#endif
 
     if (_hal->keyboard()->isKeyPressing(KEY_NUM_ENTER))
     {
