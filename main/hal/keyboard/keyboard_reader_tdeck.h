@@ -14,9 +14,9 @@
 #define TDECK_TRACKBALL_LEFT_PIN 1
 #define TDECK_TRACKBALL_DOWN_PIN 15
 #define TDECK_TRACKBALL_CLICK_PIN 0
-// Alt+mic: the only combination the stock keyboard firmware sends that is not a typed
+// Shift+mic: the only combination the stock keyboard firmware sends that is not a typed
 // character (Alt itself is not reported, Sym+mic sends '0')
-#define TDECK_KEY_ALT_MIC 0xe0
+#define TDECK_KEY_SHIFT_MIC 0xe0
 
 namespace HAL
 {
@@ -32,7 +32,7 @@ namespace KEYBOARD
      * the last key, or 0. It reports no releases, so every key becomes a short pulse.
      * The trackball pins toggle once per step of a roll and become arrow pulses. Its
      * click (the BOOT button) is ENTER when short and ESC when held, as the keyboard
-     * has no ESC; Alt+mic is TAB, which switches between voice and text.
+     * has no ESC; Shift+mic is TAB, which switches between voice and text.
      */
     class TDeckKeyboardReader : public KeyboardReader
     {

@@ -103,8 +103,8 @@ bool TDeckKeyboardReader::_ascii_to_pulse(uint8_t c, Pulse_t& pulse)
     case ' ':
         pulse.key = KEY_POS_SPACE;
         return true;
-    case TDECK_KEY_ALT_MIC:
-        // the stock keyboard firmware reports no Alt, but Alt+mic has a code of its own
+    case TDECK_KEY_SHIFT_MIC:
+        // Shift+mic has a code of its own, unlike any typed character
         pulse.key = KEY_POS_TAB;
         return true;
     default:
