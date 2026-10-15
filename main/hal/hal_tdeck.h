@@ -15,6 +15,9 @@
 // chip selects on the display's SPI bus, held high while their device is unused
 #define TDECK_RADIO_CS_GPIO GPIO_NUM_9
 #define TDECK_SDCARD_CS_GPIO GPIO_NUM_39
+#define TDECK_BACKLIGHT_GPIO GPIO_NUM_42
+// trackball click (BOOT): wakes the device from deep sleep
+#define TDECK_WAKEUP_GPIO GPIO_NUM_0
 // The app reads a home button as "cancel", ahead of the keys. The T-Deck has none (GPIO0
 // is the trackball click, which is ENTER), so it is read from the radio's reset line:
 // pulled up inside the SX1262 and never driven low here.
@@ -63,7 +66,12 @@ namespace HAL
             _speaker->tone(1000, 200);
         }
 #endif
+#if HAL_USE_BAT
+        uint8_t getBatLevel(float voltage) override;
+        float getBatVoltage() override;
+#endif
 
+        void powerOff() override;
         void reboot() override;
     };
 } // namespace HAL

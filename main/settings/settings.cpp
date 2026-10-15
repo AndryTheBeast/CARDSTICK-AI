@@ -331,6 +331,20 @@ namespace SETTINGS
             {"auto_off", "Auto power off", TYPE_STRING, "Off", "", AUTO_OFF_CHOICES, "", "Turn the device off after this long without a button press or a reply"},
             power_item,
         };
+#elif defined(CONFIG_BOARD_TDECK)
+        // no software power off on the T-Deck either: deep sleep, left with a trackball click
+        power_group.name = "Sleep";
+        SettingItem_t power_item = {"", "Sleep", TYPE_CALLBACK, "", "", "", "", "Sleep now. Click the trackball to wake up"};
+        power_item.callback = [this](SETTINGS::SettingItem_t& item)
+        {
+            if (_hal && UTILS::UI::show_confirmation_dialog(_hal, "Sleep", "Sleep? Click to wake up"))
+                _hal->powerOff();
+        };
+        power_group.items = {
+            back_item,
+            {"auto_off", "Auto sleep", TYPE_STRING, "Off", "", AUTO_OFF_CHOICES, "", "Sleep after this long without a key press or a reply. Click the trackball to wake up"},
+            power_item,
+        };
 #else
         // no software power off on the Cardputer: deep sleep
         power_group.name = "Sleep";

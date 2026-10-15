@@ -6,6 +6,7 @@
  */
 #pragma once
 
+#include "sdkconfig.h"
 #include <stdint.h>
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
@@ -30,7 +31,13 @@ namespace HAL
         ~Battery();
 
         constexpr static const adc_unit_t ADC_UNIT = ADC_UNIT_1;
+#ifdef CONFIG_BOARD_TDECK
+        // GPIO4, behind a 100k/100k divider like the Cardputer's (channel 9 is GPIO10, the
+        // T-Deck's peripheral power switch)
+        constexpr static const adc_channel_t ADC_CHANNEL = ADC_CHANNEL_3;
+#else
         constexpr static const adc_channel_t ADC_CHANNEL = ADC_CHANNEL_9;
+#endif
         constexpr static const adc_atten_t ADC_ATTEN = ADC_ATTEN_DB_12;
         constexpr static const float MEASUREMENT_OFFSET = 1.5f;
         /**
