@@ -12,6 +12,9 @@
 #include "esp_log.h"
 #include "soc/i2s_struct.h"
 #include "driver/i2s_pdm.h"
+#ifdef CONFIG_BOARD_TDECK
+#include "hal_tdeck.h"
+#endif
 
 static const char* TAG = "MIC";
 
@@ -165,7 +168,12 @@ namespace HAL
             i2s_config.gpio_cfg.bclk = (gpio_num_t)_cfg.pin_bck;
             i2s_config.gpio_cfg.ws = (gpio_num_t)_cfg.pin_ws;
             i2s_config.gpio_cfg.dout = (gpio_num_t)I2S_GPIO_UNUSED;
+#ifdef CONFIG_BOARD_TDECK
+            // the ES7210 runs from this clock: 256 x the sample rate, as set in mic_task
+            i2s_config.gpio_cfg.mclk = (gpio_num_t)TDECK_MIC_MCLK_GPIO;
+#else
             i2s_config.gpio_cfg.mclk = (gpio_num_t)I2S_GPIO_UNUSED;
+#endif
             i2s_config.gpio_cfg.din = (gpio_num_t)_cfg.pin_data_in;
 
             err = i2s_channel_init_std_mode(_rx_chan, &i2s_config);
@@ -259,6 +267,10 @@ namespace HAL
         {
             _hal->es8311()->mic_disable();
         }
+#ifdef CONFIG_BOARD_TDECK
+        if (auto* es7210 = static_cast<HalTDeck*>(_hal)->es7210())
+            es7210->stop();
+#endif
 
         if (_rx_chan)
         {
@@ -348,6 +360,11 @@ namespace HAL
         dev->rx_conf.rx_update = 0;
 
         i2s_channel_enable(self->_rx_chan);
+#ifdef CONFIG_BOARD_TDECK
+        // set up now that MCLK runs
+        if (auto* es7210 = static_cast<HalTDeck*>(self->_hal)->es7210())
+            es7210->start();
+#endif
 
         int32_t gain = self->_cfg.magnification;
         const float f_gain = (float)gain / (oversampling << 1);

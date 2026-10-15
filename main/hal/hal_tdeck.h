@@ -5,6 +5,10 @@
 #pragma once
 #include "hal.h"
 #include "common_define.h"
+#include "es7210/es7210.h"
+
+// ES7210 master clock, from the mic's I2S port
+#define TDECK_MIC_MCLK_GPIO 48
 
 // drives the supply of the keyboard, display, audio and radio
 #define TDECK_POWER_ON_GPIO GPIO_NUM_10
@@ -26,6 +30,8 @@ namespace HAL
     class HalTDeck : public Hal
     {
     private:
+        ES7210* _es7210 = nullptr;
+
         void _init_power();
 #if HAL_USE_DISPLAY
         void _init_display();
@@ -36,6 +42,8 @@ namespace HAL
 
         std::string type() override { return "T-Deck"; }
         void init() override;
+
+        inline ES7210* es7210() { return _es7210; }
 
 #if HAL_USE_SPEAKER
         void playErrorSound() override { _speaker->playWav(error_wav_start, error_wav_end - error_wav_start); }

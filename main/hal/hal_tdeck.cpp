@@ -73,11 +73,21 @@ void HalTDeck::init()
     _speaker = new Speaker(this);
 #endif
 #if HAL_USE_MIC
-    // the ES7210 is not set up yet: keep the mic off until it is
-    ESP_LOGI(TAG, "init mic (disabled)");
+    ESP_LOGI(TAG, "init mic");
+    _es7210 = new ES7210(this);
+    _es7210->init();
     _mic = new Mic(this);
     auto mic_cfg = _mic->config();
-    mic_cfg.pin_data_in = -1;
+    mic_cfg.pin_bck = 47;
+    mic_cfg.pin_ws = 21;
+    mic_cfg.pin_data_in = _es7210->is_initialized() ? 14 : -1;
+    mic_cfg.over_sampling = 1;
+    // measured: the microphone is on the ES7210's MIC1, the left slot; the right one
+    // (MIC2) carries nothing
+    mic_cfg.stereo = false;
+    mic_cfg.left_channel = true;
+    // x3 on top of the ES7210's 30 dB: speech peaks at about 2000-8000 before it
+    mic_cfg.magnification = 6;
     _mic->config(mic_cfg);
 #endif
 #if HAL_USE_BUTTON
