@@ -43,8 +43,18 @@ static const char* API_KEY_HINT = "[A] [B hold]";
 static const char* HOME_TITLE = "STICK AI";
 #elif defined(CONFIG_BOARD_TDECK)
 static const char* HOME_TITLE = "T-DECK AI";
-static const char* HINT_MAIN = "[\u2190][\u2192][\u2193] [ENTER] START " KEY_LABEL_ESC " SETTINGS";
-static const char* API_KEY_HINT = "[ENTER] " KEY_LABEL_ESC;
+static const char* HINT_MAIN = "[\u2190][\u2192][\u2193] MOVE [ENTER] START " KEY_LABEL_ESC " SETTINGS";
+static const char* API_KEY_HINT = "[ENTER]/" KEY_LABEL_ESC " BACK";
+
+// 320x240: the API key code drawn like the Web setup one, black on a white square,
+// instead of the 135 px picture; it holds the address the README gives for the key
+#define QR_GEMINI_URL "https://aistudio.google.com/apikey"
+#define QR_GEMINI_SIZE 184
+#define QR_GEMINI_MARGIN 6
+#define QR_GEMINI_BOX (QR_GEMINI_SIZE + QR_GEMINI_MARGIN * 2)
+
+// the centre of the text column beside the code, shared with the hint below it
+static int qr_gemini_text_x(LGFX_Sprite* canvas) { return QR_GEMINI_BOX + (canvas->width() - QR_GEMINI_BOX) / 2; }
 #else
 static const char* HOME_TITLE = "CARDPUTER AI";
 static const char* HINT_MAIN = "[\u2190][\u2192] [ENTER] START " KEY_LABEL_ESC " SETTINGS";
@@ -592,7 +602,13 @@ void GeminiApp::update()
         handleApiKeyScreenInput();
         need_update |= UTILS::HL_TEXT::hl_text_render(_hintTextContext,
                                                       API_KEY_HINT,
+#ifdef CONFIG_BOARD_TDECK
+                                                      // the hint strip is a screen wide, its text centred in it:
+                                                      // under the text column, as on the Cardputer
+                                                      qr_gemini_text_x(_hal->canvas()) - _hal->canvas()->width() / 2,
+#else
                                                       65,
+#endif
                                                       _hal->canvas()->height() - HINT_HEIGHT,
                                                       TFT_DARKGREY,
                                                       TFT_WHITE,
@@ -1352,10 +1368,20 @@ bool GeminiApp::drawGeminiQRScreen()
     if (is_rendered)
         return false;
     _hal->canvas()->fillScreen(THEME_COLOR_BG);
+#ifdef CONFIG_BOARD_TDECK
+    // centred down the left edge, the text in the space to its right
+    const int qr_y = (_hal->canvas()->height() - QR_GEMINI_BOX) / 2;
+    _hal->canvas()->fillRect(0, qr_y, QR_GEMINI_BOX, QR_GEMINI_BOX, TFT_WHITE);
+    _hal->canvas()->qrcode(QR_GEMINI_URL, QR_GEMINI_MARGIN, qr_y + QR_GEMINI_MARGIN, QR_GEMINI_SIZE);
+    _hal->canvas()->setFont(FONT_16);
+    _hal->canvas()->setTextColor(THEME_COLOR_TITLE);
+    int center_x = qr_gemini_text_x(_hal->canvas());
+#else
     _hal->canvas()->pushImage(0, 0, 135, 135, image_data_qr_gemini);
     _hal->canvas()->setFont(FONT_16);
     _hal->canvas()->setTextColor(THEME_COLOR_TITLE);
     int center_x = _hal->canvas()->height() + (_hal->canvas()->width() - _hal->canvas()->height()) / 2;
+#endif
     _hal->canvas()->drawCenterString("Gemini", center_x, _hal->canvas()->height() / 2 - _hal->canvas()->fontWidth());
     _hal->canvas()->setTextColor(TFT_LIGHTGREY);
     _hal->canvas()->drawCenterString("Get API key", center_x, _hal->canvas()->height() / 2 + _hal->canvas()->fontWidth());

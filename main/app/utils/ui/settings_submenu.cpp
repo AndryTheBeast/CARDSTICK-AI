@@ -21,7 +21,11 @@
 #define HINT_HEIGHT 12
 #define ITEMS_Y_OFFSET 20
 
+#ifdef CONFIG_BOARD_TDECK
+static const char* HINT_ITEMS = "[\xE2\x86\x91][\xE2\x86\x93] MOVE [ENTER] OK " KEY_LABEL_ESC " BACK";
+#else
 static const char* HINT_ITEMS = "[\xE2\x86\x91][\xE2\x86\x93] " KEY_LABEL_ESC " [ENTER]";
+#endif
 
 namespace UTILS
 {

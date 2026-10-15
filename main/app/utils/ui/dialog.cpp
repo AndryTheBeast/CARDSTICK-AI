@@ -61,8 +61,14 @@ namespace UTILS
     namespace UI
     {
         // Constants for dialog layout
+#ifdef CONFIG_BOARD_TDECK
+        // 320x240: wider, so longer titles and messages fit without scrolling
+        constexpr int DIALOG_WIDTH = 260;
+        constexpr int DIALOG_HEIGHT = 96;
+#else
         constexpr int DIALOG_WIDTH = 180;
         constexpr int DIALOG_HEIGHT = 80;
+#endif
         constexpr int DIALOG_CORNER_RADIUS = 8;
         constexpr int BUTTON_HEIGHT = 20;
         constexpr int BUTTON_WIDTH = 60;
@@ -560,7 +566,11 @@ namespace UTILS
                 auto keys_state = hal->keyboard()->keysState();
                 // Draw controls hint
                 hl_text_render(&hint_ctx,
+#ifdef CONFIG_BOARD_TDECK
+                               "[\u2190][\u2192] CURSOR [\u2191][\u2193] END/START [DEL] ERASE [ENTER] OK " KEY_LABEL_ESC " CANCEL",
+#else
                                keys_state.fn ? "[DEL]" : "[\u2191][\u2193][\u2190][\u2192] [DEL] " KEY_LABEL_ESC " [ENTER]",
+#endif
                                box_x,
                                hal->canvas()->height() - 12,
                                TFT_DARKGREY,
@@ -875,7 +885,7 @@ namespace UTILS
                     hl_text_render(&hint_ctx,
 #ifdef CONFIG_BOARD_TDECK
                                    // no Fn or Opt key: the trackball moves the cursor
-                                   "[\u2191][\u2193][\u2190][\u2192] [DEL] " KEY_LABEL_ESC " [ENTER]",
+                                   "[\u2190][\u2192] CURSOR [\u2191][\u2193] END/START [DEL] ERASE [ENTER] OK " KEY_LABEL_ESC " CANCEL",
 #else
                                    keys_state.fn ? "[\u2191][\u2193][\u2190][\u2192] [DEL]"
                                                  : "[Aa] [Fn] [OPT] [DEL] [ESC] [ENTER]",
@@ -1159,6 +1169,8 @@ namespace UTILS
                 need_update |= hl_text_render(&hint_ctx,
 #ifdef CONFIG_BOARD_STICKS3
                                               "[A] OK [B] DOWN [A hold] UP [B hold] BACK",
+#elif defined(CONFIG_BOARD_TDECK)
+                                              "[↑][↓] MOVE [←][→] PAGE [ENTER] OK " KEY_LABEL_ESC " CANCEL",
 #else
                                               "[\u2191][\u2193][\u2190][\u2192] [DEL] " KEY_LABEL_ESC " [ENTER]",
 #endif
