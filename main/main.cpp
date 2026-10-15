@@ -6,6 +6,8 @@
 #include "sdkconfig.h"
 #ifdef CONFIG_BOARD_STICKS3
 #include "hal/hal_sticks3.h"
+#elif defined(CONFIG_BOARD_TDECK)
+#include "hal/hal_tdeck.h"
 #else
 #include "hal/hal_cardputer.h"
 #endif
@@ -19,6 +21,8 @@ using namespace SETTINGS;
 Settings settings;
 #ifdef CONFIG_BOARD_STICKS3
 HalStickS3 hal(&settings);
+#elif defined(CONFIG_BOARD_TDECK)
+HalTDeck hal(&settings);
 #else
 HalCardputer hal(&settings);
 #endif

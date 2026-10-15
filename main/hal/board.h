@@ -15,6 +15,7 @@ namespace HAL
         CARDPUTER,     // Original M5Cardputer with IOMatrix
         CARDPUTER_ADV, // M5Cardputer ADV with TCA8418
         STICK_S3,      // M5StickS3 with two buttons, M5PM1 PMIC and ES8311 codec
+        TDECK,         // LilyGO T-Deck Plus with I2C keyboard, trackball, ES7210 and MAX98357A
     };
 
     /**

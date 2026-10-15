@@ -22,6 +22,10 @@ namespace I2CConfig
     // M5StickS3 internal bus: ES8311, BMI270, M5PM1
     constexpr int PIN_SDA = 47;
     constexpr int PIN_SCL = 48;
+#elif defined(CONFIG_BOARD_TDECK)
+    // T-Deck Plus: keyboard (ESP32-C3), ES7210 and GT911 touch
+    constexpr int PIN_SDA = 18;
+    constexpr int PIN_SCL = 8;
 #else
     // GPIO pins (from old I2C_Driver)
     constexpr int PIN_SDA = 8;

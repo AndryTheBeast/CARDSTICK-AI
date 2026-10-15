@@ -13,6 +13,9 @@
 #include "keyboard_reader_tca8418.h"
 #include "keyboard_reader_buttons.h"
 #include "sdkconfig.h"
+#ifdef CONFIG_BOARD_TDECK
+#include "keyboard_reader_tdeck.h"
+#endif
 #include <driver/gpio.h>
 #include "common_define.h"
 #include "esp_log.h"
@@ -28,6 +31,14 @@ void Keyboard::init()
     ESP_LOGI(TAG, "Board type STICK_S3 - using buttons");
     _board_type = HAL::BoardType::STICK_S3;
     _keyboard_reader = std::make_unique<ButtonsKeyboardReader>();
+    _keyboard_reader->init();
+    _last_pressed_time = millis();
+    return;
+#endif
+#ifdef CONFIG_BOARD_TDECK
+    ESP_LOGI(TAG, "Board type TDECK - using I2C keyboard and trackball");
+    _board_type = HAL::BoardType::TDECK;
+    _keyboard_reader = std::make_unique<TDeckKeyboardReader>(_hal);
     _keyboard_reader->init();
     _last_pressed_time = millis();
     return;

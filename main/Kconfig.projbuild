@@ -12,6 +12,12 @@ menu "HAL Configuration"
             help
                 Two buttons instead of a keyboard, no SD card and no RGB LED.
                 Disable "Enable SD card" and "Enable RGB LED" for this board.
+
+        config BOARD_TDECK
+            bool "LilyGO T-Deck Plus"
+            help
+                I2C keyboard and trackball, 320x240 display, ES7210 microphones and
+                a MAX98357A speaker amplifier. No RGB LED: disable "Enable RGB LED".
     endchoice
 
     config HAL_USE_I2C

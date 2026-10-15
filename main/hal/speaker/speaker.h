@@ -18,6 +18,11 @@
 #define SPEAKER_PIN_DATA_OUT 14
 #define SPEAKER_PIN_BCK 17
 #define SPEAKER_PIN_WS 15
+#elif defined(CONFIG_BOARD_TDECK)
+// MAX98357A amplifier, no codec
+#define SPEAKER_PIN_DATA_OUT 6
+#define SPEAKER_PIN_BCK 7
+#define SPEAKER_PIN_WS 5
 #else
 #define SPEAKER_PIN_DATA_OUT 42
 #define SPEAKER_PIN_BCK 41
