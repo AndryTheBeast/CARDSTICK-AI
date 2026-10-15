@@ -1049,10 +1049,19 @@ void GeminiApp::drawBattery(int x, int y, int w, int h, bool with_percent)
 
 #if HAL_USE_LED
 #define LED_CHECK_INTERVAL_MS 200
+#ifdef CONFIG_BOARD_TDECK
+// Blink and breathe timing, for the effect speeds Very slow to Very fast: the keyboard
+// light tells the states apart by effect alone, so it has more speeds
+static const char* const LED_SPEED_NAMES[] = {"Very slow", "Slow", "Normal", "Fast", "Very fast"};
+static const uint32_t LED_BLINK_ON_MS[] = {1000, 500, 250, 125, 60};
+static const uint32_t LED_BLINK_OFF_MS[] = {3000, 1500, 750, 375, 180};
+static const uint32_t LED_BREATHE_MS[] = {6000, 4000, 2500, 1500, 800};
+#else
 // Blink and breathe timing, for the effect speeds Slow, Normal and Fast
 static const uint32_t LED_BLINK_ON_MS[] = {500, 250, 125};
 static const uint32_t LED_BLINK_OFF_MS[] = {1500, 750, 375};
 static const uint32_t LED_BREATHE_MS[] = {4000, 2500, 1500};
+#endif
 
 // Colours are picked by name in the LED settings; "Off" or an unknown name gives no
 // light. Names and values are the ones Bruce offers for this LED.
@@ -1179,7 +1188,11 @@ void GeminiApp::updateLed()
     // speed of that effect under s_<state>
     enum { EFFECT_STEADY, EFFECT_BLINK, EFFECT_BREATHE };
     uint32_t effect = EFFECT_STEADY;
+#ifdef CONFIG_BOARD_TDECK
+    uint32_t speed = 2;
+#else
     uint32_t speed = 1;
+#endif
     if (rgb)
     {
         const std::string effect_name = settings->getString("led", std::string("e_") + (color_key + 2));
@@ -1188,10 +1201,18 @@ void GeminiApp::updateLed()
         else if (effect_name == "Breathe")
             effect = EFFECT_BREATHE;
         const std::string speed_name = settings->getString("led", std::string("s_") + (color_key + 2));
+#ifdef CONFIG_BOARD_TDECK
+        for (uint32_t i = 0; i < sizeof(LED_SPEED_NAMES) / sizeof(LED_SPEED_NAMES[0]); i++)
+        {
+            if (speed_name == LED_SPEED_NAMES[i])
+                speed = i;
+        }
+#else
         if (speed_name == "Slow")
             speed = 0;
         else if (speed_name == "Fast")
             speed = 2;
+#endif
     }
 
     const uint32_t wanted = rgb | (effect << 24) | (speed << 26);

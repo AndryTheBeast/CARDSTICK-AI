@@ -171,7 +171,7 @@ namespace SETTINGS
         // not, with an effect, and the states are told apart by those.
 #define LED_LIGHT_CHOICES "Off;On"
 #define LED_EFFECT_CHOICES "Steady;Blink;Breathe"
-#define LED_SPEED_CHOICES "Slow;Normal;Fast"
+#define LED_SPEED_CHOICES "Very slow;Slow;Normal;Fast;Very fast"
         SettingGroup_t led_group;
         led_group.name = "Keyboard light";
         led_group.nvs_namespace = "led";
